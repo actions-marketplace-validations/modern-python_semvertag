@@ -1,0 +1,79 @@
+# generated: 2026-05-26
+# last_updated: 2026-05-26 (Story 1.1 done — code review patched and applied)
+# project: semvertag
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: /Users/kevinsmith/src/pypi/autosemver/_bmad
+
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog -> in-progress: Automatically when first story is created (via create-story)
+#   - in-progress -> done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories can be worked in parallel if team capacity allows
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+
+generated: 2026-05-26
+last_updated: 2026-05-26
+project: semvertag
+last_updated_note: Epic 1 in-progress; Story 1.1 done (code review patched and applied)
+project_key: NOKEY
+tracking_system: file-system
+story_location: /Users/kevinsmith/src/pypi/autosemver/_bmad
+
+development_status:
+  # Epic 1: Foundation & First Auto-Tag (GitLab + branch-prefix)
+  epic-1: in-progress
+  1-1-bootstrap-public-scaffolding-from-modern-di: done
+  1-2-settings-layer-with-aliaschoices-and-provenance: backlog
+  1-3-errors-runresult-output-redaction: backlog
+  1-4-retryingtransport-with-retry-policy: backlog
+  1-5-gitlabprovider-four-endpoints-via-httpx2: backlog
+  1-6-branchprefixstrategy-100-branch-coverage: backlog
+  1-7-wire-di-groups-and-typer-entrypoint: backlog
+  epic-1-retrospective: optional
+
+  # Epic 2: Conventional Commits Strategy & Per-Repo Switching
+  epic-2: backlog
+  2-1-conventional-commits-strategy-and-per-repo-switching: backlog
+  epic-2-retrospective: optional
+
+  # Epic 3: Pre-flight Diagnostics (semvertag doctor)
+  epic-3: backlog
+  3-1-doctor-chain-runner-and-exit-code-dominance: backlog
+  3-2-doctor-typer-subcommand-and-json-form: backlog
+  epic-3-retrospective: optional
+
+  # Epic 4: Public-Launch Readiness - Trust Surface, Distribution & Shadow-Mode
+  epic-4: backlog
+  4-1-ci-workflow-polish: backlog
+  4-2-publish-workflow-via-trusted-publishing: backlog
+  4-3a-github-actions-marketplace-wrapper: backlog
+  4-3b-gitlab-ci-catalog-component: backlog
+  4-4-mkdocs-site-content: backlog
+  4-5-three-migration-guides: backlog
+  4-6-trust-surface-markdown: backlog
+  4-7-readme-hero-and-issue-templates: backlog
+  4-8-shadow-mode-parity-validation: backlog
+  epic-4-retrospective: optional

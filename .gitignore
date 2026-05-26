@@ -19,3 +19,5 @@ dist/
 .python-version
 .venv
 plan.md
+/site/
+/_autosemver_reference/
