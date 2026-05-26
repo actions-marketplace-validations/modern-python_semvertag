@@ -1,0 +1,94 @@
+[project]
+name = "semvertag"
+description = "Auto-tag GitLab/GitHub/Bitbucket repos with semantic version tags — one tool, two strategies."
+authors = [{ name = "Artur Shiriev", email = "me@shiriev.ru" }]
+requires-python = ">=3.10,<4"
+license = "MIT"
+readme = "README.md"
+keywords = ["semver", "gitlab", "ci", "auto-tag", "conventional-commits"]
+classifiers = [
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
+    "Topic :: Software Development :: Libraries",
+]
+version = "0"
+dependencies = [
+    "typer",
+    "rich",
+    "semver",
+    "pydantic-settings",
+    "modern-di-typer",
+    "httpx2",
+]
+
+[project.scripts]
+semvertag = "semvertag.__main__:main"
+
+[project.urls]
+repository = "https://github.com/<org>/semvertag"
+docs = "https://semvertag.readthedocs.io"
+
+[build-system]
+requires = ["uv_build"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "semvertag"
+module-root = ""
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist",
+    "pytest-randomly",
+]
+lint = [
+    "ruff",
+    "ty",
+    "auto-typing-final",
+    "eof-fixer",
+]
+
+[tool.ruff]
+fix = true
+unsafe-fixes = true
+line-length = 120
+target-version = "py310"
+extend-exclude = ["docs", "_autosemver_reference", "_bmad"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "D1",
+    "FBT",
+    "TRY003",
+    "EM102",
+    "D203",
+    "D212",
+    "COM812",
+    "ISC001",
+    "S105",
+]
+isort.lines-after-imports = 2
+isort.no-lines-before = ["standard-library", "local-folder"]
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/*.py" = ["S101"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=. --cov-report term-missing"
+testpaths = ["tests"]
+
+[tool.coverage.report]
+exclude_also = ["if typing.TYPE_CHECKING:", "if TYPE_CHECKING:"]
+
+[tool.coverage.run]
+omit = ["_autosemver_reference/*", "_bmad/*", "tests/*"]
+
+[tool.ty.src]
+exclude = ["_autosemver_reference", "_bmad", "docs"]
