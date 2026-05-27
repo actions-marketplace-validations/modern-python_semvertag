@@ -34,3 +34,9 @@ Tracking issues raised during code review that were intentionally not fixed in-c
 - Marginal redact-test coverage gaps: `redact("")`, multi-line input, two adjacent tokens, uppercase-only hex, hex bordered by `-`/`_`/`.`/`:` [`tests/unit/test_redact.py`] — beyond AC8 text; 100% line coverage already met.
 - AC9 narrative example uses 19-char token body (`"glpat-RealToken1234567890"`) while pattern requires ≥20 [spec `1-3-...md` AC9 narrative] — cosmetic spec fix; tests use a 20+-char fixture.
 - Dev Agent Record §Debug Log References doesn't mention the extra token families Task 3.3 asked the dev to note for Story 1.5/3.x — recorded here so the next refactor sees the list.
+
+## Deferred from: code review of 1-4-retryingtransport-with-retry-policy (2026-05-27)
+
+- Response objects from failed retry attempts are discarded without `response.close()` [`semvertag/_transport.py:33-39`] — harmless under `MockTransport`, but real `httpx2.HTTPTransport` may leak a connection back to the pool on each discarded 5xx. Architecture sketch (story line 309) also discards. Verify in Story 1.5 GitLabProvider integration tests; add `response.close()` to the retry loop if pool drainage shows leakage.
+- `RETRYABLE_EXCEPTIONS` omits `httpx2.ConnectTimeout` and `httpx2.PoolTimeout` [`semvertag/_transport.py:10-15`] — AC1 fixes the tuple to these exact 4 types. `ConnectTimeout` is the most glaring omission; production retry layers commonly include it. Changing the tuple requires an AC1 revision in a future story.
+- Retries apply to non-idempotent methods (POST/PATCH) unconditionally — `handle_request` does not inspect `request.method` [`semvertag/_transport.py:27-49`]. semvertag's only POST is tag creation; the GitLabProvider (Story 1.5) translates 409 "tag already exists" so duplicate-tag risk is mitigated downstream. Revisit if a non-idempotent endpoint without server-side idempotency ever lands.
