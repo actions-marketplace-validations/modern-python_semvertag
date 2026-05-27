@@ -17,3 +17,22 @@ class RunResult:
     tag: str | None
     commit: str | None
     reason: str | None
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class Commit:
+    sha: str
+    message: str
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class Tag:
+    name: str
+    commit_sha: str
+
+
+@dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
+class CheckResult:
+    name: str
+    status: typing.Literal["passed", "failed", "skipped"]
+    cause: str
