@@ -22,3 +22,15 @@ Tracking issues raised during code review that were intentionally not fixed in-c
 - Concurrency `group: ${{ github.head_ref || github.run_id }}` falls back to unique `run_id` on push events — concurrent main-branch runs are never cancelled. Template-inherited.
 - `actions/checkout@v4` default `fetch-depth: 1` and no `fetch-tags: true` — fine while only the smoke test exists, but a semver-tagging tool will need git history + tags once provider tests land (Story 1.5+).
 - `uv sync --all-extras` is a no-op (no `[project.optional-dependencies]` declared) [Justfile:5]. Template-inherited; harmless today but confusing for new contributors.
+
+## Deferred from: code review of 1-3-errors-runresult-output-redaction (2026-05-27)
+
+- Token-family coverage gaps in `_redact.py:6-11` — `gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`, AWS `AKIA`/`ASIA`, OpenAI `sk-*`, Slack `xox*`, Stripe `sk_live_*`, Azure SAS `sig=`, Bitbucket `ATCTT…`. AC7 explicitly scoped this story to four families; Task 3.3 flagged the rest for Story 1.5/3.x.
+- Full git SHAs (40+ hex chars) inside error/progress messages are redacted to `***` [`_redact.py:10`] — accepted architectural trade-off; revisit when token-family expansion happens.
+- `BrokenPipeError` / `OSError` on `sys.stdout.write` and `Console.print` [`_output.py:30, 33, 36, 48-50, 53`] — `semvertag ... | head` will traceback today. Belongs to Story 1.7 CLI top-level handler.
+- `build_rich_output` / `build_json_output` have no `force_terminal` / `color_system` override [`_output.py:66-78`] — Story 1.7 wires CLI flags; revisit when `--no-color` / `--color=always` semantics are decided.
+- `JsonOutput.emit` doesn't pass the serialized payload through `redact()` [`_output.py:47-50`] — if `RunResult.reason` ever carries a token (e.g. provider error text), it leaks unredacted in JSON output. Decide in Story 1.5/1.7 when reason values are populated.
+- Long Rich messages wrap at default `width=80` and may break single-line log expectations [`_output.py:30, 33`] — redaction is applied pre-wrap so security is unaffected; add `soft_wrap=True`/`no_wrap=True` only if downstream log parsers complain.
+- Marginal redact-test coverage gaps: `redact("")`, multi-line input, two adjacent tokens, uppercase-only hex, hex bordered by `-`/`_`/`.`/`:` [`tests/unit/test_redact.py`] — beyond AC8 text; 100% line coverage already met.
+- AC9 narrative example uses 19-char token body (`"glpat-RealToken1234567890"`) while pattern requires ≥20 [spec `1-3-...md` AC9 narrative] — cosmetic spec fix; tests use a 20+-char fixture.
+- Dev Agent Record §Debug Log References doesn't mention the extra token families Task 3.3 asked the dev to note for Story 1.5/3.x — recorded here so the next refactor sees the list.

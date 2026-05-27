@@ -50,7 +50,6 @@ dev = [
 lint = [
     "ruff",
     "ty",
-    "auto-typing-final",
     "eof-fixer",
 ]
 
@@ -78,7 +77,7 @@ isort.lines-after-imports = 2
 isort.no-lines-before = ["standard-library", "local-folder"]
 
 [tool.ruff.lint.extend-per-file-ignores]
-"tests/*.py" = ["S101"]
+"tests/**/*.py" = ["S101", "SLF001"]
 
 [tool.pytest.ini_options]
 addopts = "--cov=. --cov-report term-missing"

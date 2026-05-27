@@ -1,5 +1,5 @@
 # generated: 2026-05-26
-# last_updated: 2026-05-26 (Story 1.1 done — code review patched and applied)
+# last_updated: 2026-05-27 (Story 1.3 done after review)
 # project: semvertag
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,9 +35,9 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-26
-last_updated: 2026-05-26
+last_updated: 2026-05-27
 project: semvertag
-last_updated_note: Epic 1 in-progress; Story 1.1 done (code review patched and applied)
+last_updated_note: Story 1.3 review complete - 8 patches applied, 9 deferred, status done
 project_key: NOKEY
 tracking_system: file-system
 story_location: /Users/kevinsmith/src/pypi/autosemver/_bmad
@@ -46,8 +46,8 @@ development_status:
   # Epic 1: Foundation & First Auto-Tag (GitLab + branch-prefix)
   epic-1: in-progress
   1-1-bootstrap-public-scaffolding-from-modern-di: done
-  1-2-settings-layer-with-aliaschoices-and-provenance: backlog
-  1-3-errors-runresult-output-redaction: backlog
+  1-2-settings-layer-with-aliaschoices-and-provenance: done
+  1-3-errors-runresult-output-redaction: done
   1-4-retryingtransport-with-retry-policy: backlog
   1-5-gitlabprovider-four-endpoints-via-httpx2: backlog
   1-6-branchprefixstrategy-100-branch-coverage: backlog
