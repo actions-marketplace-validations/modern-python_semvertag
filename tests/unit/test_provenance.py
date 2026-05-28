@@ -20,6 +20,8 @@ _EXPECTED_KEYS: typing.Final = (
     "provider",
     "default_branch",
     "request_timeout",
+    "project_id",
+    "quiet",
     "gitlab.endpoint",
     "gitlab.token",
     "github.token",
@@ -29,6 +31,11 @@ _EXPECTED_KEYS: typing.Final = (
     "conventional_commits.minor_types",
     "conventional_commits.patch_types",
 )
+_PROJECT_ID_SEMVERTAG: typing.Final = "999"
+_PROJECT_ID_CI: typing.Final = "777"
+_CLI_PROJECT_ID_FLAG: typing.Final = "--project-id"
+_CLI_DEFAULT_BRANCH_FLAG: typing.Final = "--default-branch"
+_CLI_QUIET_FLAG: typing.Final = "--quiet"
 
 
 @pytest.mark.usefixtures("clean_settings_env")
@@ -127,3 +134,58 @@ def test_every_documented_field_has_a_provenance_entry() -> None:
     recorded: typing.Final = set(settings._provenance.keys())
     missing: typing.Final = set(_EXPECTED_KEYS) - recorded
     assert missing == set(), f"Missing provenance entries: {sorted(missing)}"
+
+
+@pytest.mark.usefixtures("clean_settings_env")
+def test_provenance_records_semvertag_project_id_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SEMVERTAG_PROJECT_ID", _PROJECT_ID_SEMVERTAG)
+    settings: typing.Final = Settings()
+    assert settings._provenance["project_id"] == ConfigSource(layer="env", detail="SEMVERTAG_PROJECT_ID")
+
+
+@pytest.mark.usefixtures("clean_settings_env")
+def test_provenance_records_ci_project_id_when_only_native_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CI_PROJECT_ID", _PROJECT_ID_CI)
+    settings: typing.Final = Settings()
+    assert settings._provenance["project_id"] == ConfigSource(layer="env", detail="CI_PROJECT_ID")
+
+
+@pytest.mark.usefixtures("clean_settings_env")
+def test_provenance_records_default_for_project_id_when_unset() -> None:
+    settings: typing.Final = Settings()
+    assert settings._provenance["project_id"] == ConfigSource(layer="default", detail="default")
+
+
+@pytest.mark.usefixtures("clean_settings_env")
+def test_cli_overlay_records_provenance_for_project_id() -> None:
+    settings: typing.Final = Settings()
+    overlaid: typing.Final = apply_cli_overlay(
+        settings,
+        {"project_id": (42, _CLI_PROJECT_ID_FLAG)},
+    )
+    assert overlaid.project_id == 42  # noqa: PLR2004
+    assert overlaid._provenance["project_id"] == ConfigSource(layer="cli", detail=_CLI_PROJECT_ID_FLAG)
+
+
+@pytest.mark.usefixtures("clean_settings_env")
+def test_cli_overlay_records_provenance_for_default_branch() -> None:
+    settings: typing.Final = Settings()
+    overlaid: typing.Final = apply_cli_overlay(
+        settings,
+        {"default_branch": ("develop", _CLI_DEFAULT_BRANCH_FLAG)},
+    )
+    assert overlaid.default_branch == "develop"
+    assert overlaid._provenance["default_branch"] == ConfigSource(layer="cli", detail=_CLI_DEFAULT_BRANCH_FLAG)
+
+
+@pytest.mark.usefixtures("clean_settings_env")
+def test_cli_overlay_records_provenance_for_quiet() -> None:
+    settings: typing.Final = Settings()
+    overlaid: typing.Final = apply_cli_overlay(
+        settings,
+        {"quiet": (True, _CLI_QUIET_FLAG)},
+    )
+    assert overlaid.quiet is True
+    assert overlaid._provenance["quiet"] == ConfigSource(layer="cli", detail=_CLI_QUIET_FLAG)

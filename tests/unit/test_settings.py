@@ -17,6 +17,10 @@ _TIMEOUT_CEILING_VALUE: typing.Final = 10.0
 _TIMEOUT_UNDER_VALUE: typing.Final = 5.5
 _TIMEOUT_DEFAULT_VALUE: typing.Final = 8.0
 _PLAINTEXT_SECRET: typing.Final = "plaintext-secret-marker"
+_PROJECT_ID_SEMVERTAG: typing.Final = "999"
+_PROJECT_ID_CI: typing.Final = "777"
+_PROJECT_ID_INT_SEMVERTAG: typing.Final = 999
+_PROJECT_ID_INT_CI: typing.Final = 777
 
 
 @pytest.mark.usefixtures("clean_settings_env")
@@ -26,6 +30,8 @@ def test_uses_defaults_when_no_env_set() -> None:
     assert settings.strategy == "branch-prefix"
     assert settings.default_branch is None
     assert settings.request_timeout == _TIMEOUT_DEFAULT_VALUE
+    assert settings.project_id is None
+    assert settings.quiet is False
     assert settings.gitlab.endpoint == "https://gitlab.com"
     assert settings.gitlab.token.get_secret_value() == ""
     assert settings.github.token.get_secret_value() == ""
@@ -112,3 +118,40 @@ def test_request_timeout_rejects_non_positive_values(
     monkeypatch.setenv("SEMVERTAG_REQUEST_TIMEOUT", "0")
     with pytest.raises(pydantic.ValidationError):
         Settings()
+
+
+@pytest.mark.usefixtures("clean_settings_env")
+def test_resolves_project_id_from_semvertag_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SEMVERTAG_PROJECT_ID", _PROJECT_ID_SEMVERTAG)
+    settings: typing.Final = Settings()
+    assert settings.project_id == _PROJECT_ID_INT_SEMVERTAG
+
+
+@pytest.mark.usefixtures("clean_settings_env")
+def test_resolves_project_id_from_ci_project_id_when_only_native_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("CI_PROJECT_ID", _PROJECT_ID_CI)
+    settings: typing.Final = Settings()
+    assert settings.project_id == _PROJECT_ID_INT_CI
+
+
+@pytest.mark.usefixtures("clean_settings_env")
+def test_prefers_semvertag_project_id_over_ci_project_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SEMVERTAG_PROJECT_ID", _PROJECT_ID_SEMVERTAG)
+    monkeypatch.setenv("CI_PROJECT_ID", _PROJECT_ID_CI)
+    settings: typing.Final = Settings()
+    assert settings.project_id == _PROJECT_ID_INT_SEMVERTAG
+
+
+@pytest.mark.usefixtures("clean_settings_env")
+def test_quiet_picks_up_semvertag_quiet_env_var(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SEMVERTAG_QUIET", "true")
+    settings: typing.Final = Settings()
+    assert settings.quiet is True

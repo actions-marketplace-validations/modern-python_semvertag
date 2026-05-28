@@ -1,6 +1,6 @@
 # Story 1.7: Wire DI groups + Typer entrypoint to deliver the `uvx semvertag` flow
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -12,19 +12,20 @@ So that I have a working end-to-end product for Journey 1 before bump-strategy a
 
 ## Acceptance Criteria
 
-### AC1 — `semvertag/ioc.py` defines four `modern_di.Group` subclasses with lazy `Factory` resolution
+### AC1 — `semvertag/ioc.py` defines five `modern_di.Group` subclasses with lazy `Factory` resolution and explicit `kwargs` wiring
 
 **Given** `semvertag/ioc.py` is a new module
 **When** I import it
-**Then** it exposes exactly four `Group` subclasses with these factory members:
+**Then** it exposes exactly five `Group` subclasses:
 
-- `SettingsGroup.settings: providers.Factory[Settings]` — `scope=Scope.APP`, constructs `Settings` from env (the entrypoint replaces this with a post-CLI-overlay instance via the container's `context` parameter at run time; see Dev Notes §Container construction for the injection pattern).
-- `OutputsGroup.rich_output: providers.Factory[RichOutput]` — creator `_build_rich_output(settings)`; reads `settings.quiet` (or equivalent run-time flag; see Dev Notes §Output selection).
-- `OutputsGroup.json_output: providers.Factory[JsonOutput]` — creator `_build_json_output(settings)`.
-- `ProvidersGroup.gitlab_provider: providers.Factory[GitLabProvider]` — creator `_build_gitlab_provider(settings)`; lazy-imports `semvertag.providers.gitlab.GitLabProvider` and `semvertag._transport.RetryingTransport`; constructs an `httpx2.Client(transport=RetryingTransport(...), base_url=settings.gitlab.endpoint, timeout=settings.request_timeout)`.
+- `SettingsGroup.settings: providers.Factory[Settings]` — `scope=Scope.APP`, creator returns a bare `Settings()` (env-only). The entrypoint supersedes this at run time by passing the post-CLI-overlay `Settings` instance via the container's `context={Settings: instance}` parameter — see Dev Notes §Container construction.
+- `OutputsGroup.rich_output: providers.Factory[RichOutput]` — creator `_build_rich_output(settings)`; returns `_output.build_rich_output(quiet=settings.quiet)`.
+- `OutputsGroup.json_output: providers.Factory[JsonOutput]` — creator `_build_json_output(settings)`; returns `_output.build_json_output(quiet=settings.quiet)`.
+- `ProvidersGroup.gitlab_provider: providers.Factory[GitLabProvider]` — creator `_build_gitlab_provider(settings)`; lazy-imports `semvertag.providers.gitlab.GitLabProvider` and `semvertag._transport.RetryingTransport`; constructs `httpx2.Client(transport=RetryingTransport(inner=...), base_url=settings.gitlab.endpoint, timeout=settings.request_timeout)`. The `inner` defaults to `None` (production); tests inject a `MockTransport` via `Container.overrides_registry` — see Dev Notes §Test integration seam.
 - `StrategiesGroup.branch_prefix_strategy: providers.Factory[BranchPrefixStrategy]` — creator `_build_branch_prefix_strategy(settings)`; returns `BranchPrefixStrategy(config=settings.branch_prefix)`.
+- `UseCasesGroup.semvertag_use_case: providers.Factory[SemvertagUseCase]` — **uses explicit `kwargs` wiring** (NOT type-based auto-resolution, because the `Provider`/`BumpStrategy`/`Output` field types are Protocols, not concrete classes registered by modern-di): `providers.Factory(scope=Scope.APP, creator=SemvertagUseCase, kwargs={"provider": ProvidersGroup.gitlab_provider, "strategy": StrategiesGroup.branch_prefix_strategy, "output": <active OutputsGroup factory selected by the entrypoint, see AC6.5>})`.
 
-**And** `ALL_GROUPS: typing.Final[list[type[modern_di.Group]]] = [SettingsGroup, OutputsGroup, ProvidersGroup, StrategiesGroup]` is exported at module scope.
+**And** `ALL_GROUPS: typing.Final[list[type[modern_di.Group]]] = [SettingsGroup, OutputsGroup, ProvidersGroup, StrategiesGroup, UseCasesGroup]` is exported at module scope.
 
 **And** only the active provider Factory and the active strategy Factory are resolved per CLI run — `_build_gitlab_provider` and `_build_branch_prefix_strategy` use **lazy imports** at the provider/strategy module boundary so importing `ioc.py` does not import `gitlab.py` or `branch_prefix.py` until resolution.
 
@@ -56,6 +57,8 @@ class SemvertagUseCase:
 8. Return the same `RunResult` from `run()` (returning enables unit-tests of `run()` without parsing output streams).
 
 **And** `output.progress(...)` is called at least once before each provider call (e.g., `"Detected strategy: branch-prefix"`, `"Fetching latest commit on main..."`, `"Computing bump..."`) — these are no-ops for `JsonOutput` per the Output protocol.
+
+> **Implementation note:** `GitLabProvider.get_latest_commit_on_default_branch()` (gitlab.py:68-69) calls `get_default_branch()` **internally**. The use case does NOT need to call `get_default_branch()` explicitly — that would generate a redundant API request. Integration test handlers therefore must only respond to the four endpoints the provider itself invokes (project metadata, commits, tags GET, tags POST).
 
 ### AC3 — `already_tagged` short-circuit emits `status="already_tagged"` and the entrypoint exits 0
 
@@ -99,12 +102,50 @@ class SemvertagUseCase:
 - `--gitlab-endpoint <url>` — overrides `settings.gitlab.endpoint`
 - `--request-timeout <float>` — overrides `settings.request_timeout`
 - `--json` — selects `JsonOutput`
-- `--quiet` — suppresses progress narrative (final result still emits)
+- `--quiet` — sets `settings.quiet = True` via CLI overlay; suppresses progress narrative (final result still emits per FR36)
 - `--install-completion [shell]` — typer-built-in
 - `--version` — prints `importlib.metadata.version("semvertag")` then exits 0
 
-**And** `__main__.py` declares `MAIN_APP: typing.Final = typer.Typer(...)` (note `typing.Final` annotation per architecture §Module-Level Constants).
+**And** `__main__.py` declares `MAIN_APP: typing.Final = typer.Typer(name="semvertag", help="...", invoke_without_command=True, no_args_is_help=False, add_completion=True)`. The `invoke_without_command=True` + `no_args_is_help=False` combination is mandatory so that bare `semvertag` (no subcommand) runs the main verb via `@MAIN_APP.callback()`, while Story 3.2's future `@MAIN_APP.command(name="doctor")` lands cleanly without restructuring.
+
+**And** the main-verb dispatch lives in the callback:
+
+```python
+@MAIN_APP.callback()
+@modern_di_typer.inject
+def main(
+    ctx: typer.Context,
+    project_id: typing.Annotated[int | None, typer.Option("--project-id")] = None,
+    strategy: typing.Annotated[str | None, typer.Option("--strategy")] = None,
+    # ... other flags ...
+    use_case: typing.Annotated[SemvertagUseCase, modern_di_typer.FromDI(UseCasesGroup.semvertag_use_case)] = None,  # ty: ignore
+) -> None:
+    if ctx.invoked_subcommand is not None:
+        return  # let the subcommand handle the run (Story 3.2)
+    # ... env-resolve Settings, apply CLI overlay, run use_case ...
+```
+
+> **Wiring nuance:** `UseCasesGroup.semvertag_use_case` resolves Provider/Strategy/Output via the `kwargs={...}` from AC1. The `@inject` decorator + `FromDI(UseCasesGroup.semvertag_use_case)` annotation is the documented modern-di-typer pattern (`_autosemver_reference/__main__.py:22-32`). Do NOT call `container.resolve(SemvertagUseCase)` directly — the `@inject` decorator is the canonical entry point.
+
 **And** the entrypoint is invokable via `python -m semvertag` (the `if __name__ == "__main__":` block is required so `python -m semvertag` works locally for debugging).
+
+### AC6.5 — Output selection happens at the callback boundary
+
+**Given** the `--json` flag is parsed from the CLI
+**When** the callback assembles the container
+**Then** the callback picks `OutputsGroup.json_output` when `--json` is set, otherwise `OutputsGroup.rich_output`, and binds that factory to `UseCasesGroup.semvertag_use_case`'s `output` kwarg via either: (a) two distinct `UseCasesGroup` factories (`semvertag_use_case_rich`, `semvertag_use_case_json`), OR (b) a single `UseCasesGroup.semvertag_use_case` Factory whose `output` kwarg is resolved through `OutputsGroup.<picked>` set programmatically in `build_container(settings, *, json: bool = False)`. **Pick (b)** — it keeps `UseCasesGroup` to a single Factory and centralizes the dispatch in `build_container`.
+
+**And** the `quiet` flag lives on `Settings` (`quiet: bool = False` field, no env alias — CLI-only) so it flows through `apply_cli_overlay` and is recorded in `_provenance` (consumed by Story 3.2 doctor's config-section renderer).
+
+### AC6.6 — `--default-branch` flag wires into Settings but does NOT yet alter provider behavior in v1.0
+
+**Given** the `--default-branch` flag is present in `--help` per AC6
+**When** the user invokes `semvertag --default-branch develop`
+**Then** the value flows through `apply_cli_overlay({"default_branch": ("develop", "--default-branch")})` into `settings.default_branch`, and the entry is recorded in `_provenance` as `("cli", "--default-branch")`.
+
+**And** in v1.0, `GitLabProvider.get_default_branch()` (`providers/gitlab.py:47-66`) does NOT consume `settings.default_branch` — it always asks the GitLab API. This is **intentional v1.0 scope**: the flag exists and provenance is recorded for forward compatibility (doctor renders it; v1.x activates it), but **no edits to `providers/gitlab.py` are made in this story** (Story 1.5 regression canary).
+
+> **Documented in deferred-work (Task 7.4):** activating `--default-branch` to actually override the provider's API call is v1.x scope; requires either (a) extending the `Provider` protocol with `get_default_branch(override: str | None = None)`, or (b) accepting `settings.default_branch` at provider construction. Both are protocol-surface changes that warrant their own story.
 
 ### AC7 — Single exception→exit-code conversion point in `__main__.py`
 
@@ -121,6 +162,8 @@ class SemvertagUseCase:
 **And** **no other module** in `semvertag/` calls `typer.Exit(...)` or `sys.exit(...)` — exit-code mapping happens at exactly one place (architecture §Cross-cutting concerns line 1216).
 
 **And** `BrokenPipeError` / `OSError` on stdout writes (e.g., `semvertag ... | head -1`) are caught at the entrypoint boundary and produce exit 0 (POSIX convention; resolves deferred-work entry from Story 1.3 about `BrokenPipeError`).
+
+**And** `pydantic.ValidationError` (raised when env vars or CLI overlay produce a `Settings` shape that fails validation — e.g., `SEMVERTAG_REQUEST_TIMEOUT="abc"`, `--strategy=invalid-name`) is caught at the entrypoint boundary and **re-raised as `ConfigError(...)`** carrying a redacted, named-actionable cause assembled from `exc.errors()[0]` — then routed through the same `output.error(...)` + `typer.Exit(code=2)` path. Likewise, `ValueError` raised by `apply_cli_overlay` (unknown key, depth exceeded — `_settings.py:195, 198, 203, 221`) is caught and re-raised as `ConfigError(str(exc))` → exit 2. **Rationale:** FR37 mandates exit code 2 for configuration errors; pydantic validation IS configuration error from the user's perspective, so it must not leak as exit 1 via Typer's default handler.
 
 ### AC8 — Integration tests in `tests/integration/test_cli_main_verb.py` exercise the four use-case outcomes via `CliRunner` + injected `MockTransport`
 
@@ -185,79 +228,115 @@ class SemvertagUseCase:
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Add `project_id` to `Settings` with `CI_PROJECT_ID` env alias (AC6, AC8 cells 2-4)** — minimal edit to `semvertag/_settings.py`; preserves Story 1.2's regression canary.
-  - [ ] 1.1 Add field `project_id: int | None = pydantic.Field(default=None)` to top-level `Settings` (NOT to `GitLabConfig`; keeps provider configs symmetric — GitHub/Bitbucket would have their own repo-identifier fields in v1.x).
-  - [ ] 1.2 Extend the token-alias machinery in `_settings.py` to also alias `SEMVERTAG_PROJECT_ID` with fallback `CI_PROJECT_ID` (add to a new `_PROJECT_ID_ALIASES` constant; route through the existing `_TOKEN_ALIASES_BY_PATH` pattern OR via `validation_alias=pydantic.AliasChoices(...)` on the field — both are spec-compliant; pick whichever surfaces in `_provenance` correctly).
-  - [ ] 1.3 Update `tests/unit/test_settings.py` and `tests/unit/test_provenance.py` to confirm: (a) `project_id` defaults to `None`, (b) `SEMVERTAG_PROJECT_ID=42` resolves to `42` with provenance `("env", "SEMVERTAG_PROJECT_ID")`, (c) `CI_PROJECT_ID=42` resolves to `42` with provenance `("env", "CI_PROJECT_ID")` only when `SEMVERTAG_PROJECT_ID` is absent.
-  - [ ] 1.4 Confirm Story 1.2's 10 settings tests still pass byte-for-byte (no field renames, no default changes to existing fields).
+- [x] **Task 1: Extend `Settings` with `project_id` + `CI_PROJECT_ID` alias and `quiet` (AC6, AC6.5, AC6.6, AC8 cells 2-4, E2, E4)** — minimal edit to `semvertag/_settings.py`; preserves Story 1.2's regression canary.
+  - [x] 1.1 Add field `project_id: int | None = pydantic.Field(default=None)` to top-level `Settings` (NOT to `GitLabConfig`; keeps provider configs symmetric — GitHub/Bitbucket would have their own repo-identifier fields in v1.x).
+  - [x] 1.2 Add field `quiet: bool = pydantic.Field(default=False)` to top-level `Settings`. **No env alias** — CLI-only, populated by `apply_cli_overlay({"quiet": (flag_value, "--quiet")})`. Records in `_provenance` for doctor display.
+  - [x] 1.3 Extend the token-alias machinery in `_settings.py` so `SEMVERTAG_PROJECT_ID` env (or `CI_PROJECT_ID` fallback) resolves into `Settings.project_id`. Implementation choice: extend the existing `_TOKEN_ALIASES_BY_PATH` / `_inject_token_aliases` pattern with a sibling `_PROJECT_ID_ALIASES` constant + `_inject_project_id_alias` method (chosen because it surfaces in `_provenance` correctly via the existing `_resolve_source`/`_candidate_env_names` path). `validation_alias=pydantic.AliasChoices(...)` on the field would also work but bypasses `_provenance` recording — do NOT use it.
+  - [x] 1.4 Update `tests/unit/test_settings.py` to assert: (a) `project_id` defaults to `None` and `quiet` defaults to `False`, (b) `SEMVERTAG_PROJECT_ID=42` → `42` resolved, (c) `CI_PROJECT_ID=42` → `42` resolved only when `SEMVERTAG_PROJECT_ID` is unset.
+  - [x] 1.5 Update `tests/unit/test_provenance.py` to assert: (a) `("env", "SEMVERTAG_PROJECT_ID")` provenance when env-set, (b) `("env", "CI_PROJECT_ID")` provenance when fallback wins, (c) `("cli", "--project-id")` provenance when `apply_cli_overlay` overrides, (d) `("cli", "--default-branch")` provenance lands correctly (so Story 3.2 doctor can render it), (e) `("cli", "--quiet")` provenance when set, (f) `("default", "default")` provenance for unset fields.
+  - [x] 1.6 Confirm Story 1.2's existing 10 settings tests still pass byte-for-byte (no field renames, no default changes to existing fields, no public API breakage).
 
-- [ ] **Task 2: Author `semvertag/_use_case.py:SemvertagUseCase` (AC2, AC3, AC4, AC5)**
-  - [ ] 2.1 Create the module with global imports per CLAUDE.md (`import dataclasses; import typing; import semver`).
-  - [ ] 2.2 Declare the frozen dataclass shape per AC2 (frozen=True, slots=True, kw_only=True; fields typed against the protocols `Provider`, `BumpStrategy`, `Output`).
-  - [ ] 2.3 Implement `run() -> RunResult` orchestrating the happy path per AC2 step list.
-  - [ ] 2.4 Add the `_pick_latest_semver_tag(tags: list[Tag]) -> Tag | None` helper that filters to semver-conforming names (use `semver.Version.parse` in a try/except; `semver.VersionInfo.is_valid` is also acceptable) and returns the highest by semver ordering, NOT by list position (FR8).
-  - [ ] 2.5 Add the `_compute_new_version(last_tag: Tag, bump: Bump) -> str` helper using `semver.Version.parse(last_tag.name).bump_minor()` / `.bump_patch()` / `.bump_major()`.
-  - [ ] 2.6 Add the `_status_for_no_bump(strategy_name: str) -> str` helper returning `"no_merge_commit"` for `strategy_name == "branch-prefix"` (Story 2.1 will extend to `"no_conforming_commit"` for `"conventional-commits"`).
-  - [ ] 2.7 Wire the short-circuits: `already_tagged` (AC3) before `strategy.decide`; `no_tags` (AC5) when `_pick_latest_semver_tag` returns `None`; `no_merge_commit` (AC4) when `bump is Bump.NONE`.
-  - [ ] 2.8 Emit progress lines via `output.progress(...)` between steps (no progress emission inside no-op short-circuits except the entrypoint status line, to keep `--json` runs fully quiet).
-  - [ ] 2.9 Call `output.emit(result)` exactly once at the end and `return result` so unit tests can assert on the return value without parsing streams.
+- [x] **Task 2: Author `semvertag/_use_case.py:SemvertagUseCase` (AC2, AC3, AC4, AC5)**
+  - [x] 2.1 Create the module with global imports per CLAUDE.md (`import dataclasses; import typing; import semver`).
+  - [x] 2.2 Declare the frozen dataclass shape per AC2 (frozen=True, slots=True, kw_only=True; fields typed against the protocols `Provider`, `BumpStrategy`, `Output`).
+  - [x] 2.3 Implement `run() -> RunResult` orchestrating the happy path per AC2 step list.
+  - [x] 2.4 Add the `_pick_latest_semver_tag(tags: list[Tag]) -> Tag | None` helper that filters to semver-conforming names (use `semver.Version.parse` in a try/except; `semver.VersionInfo.is_valid` is also acceptable) and returns the highest by semver ordering, NOT by list position (FR8).
+  - [x] 2.5 Add the `_compute_new_version(last_tag: Tag, bump: Bump) -> str` helper using `semver.Version.parse(last_tag.name).bump_minor()` / `.bump_patch()` / `.bump_major()`.
+  - [x] 2.6 Add the `_status_for_no_bump(strategy_name: str) -> str` helper returning `"no_merge_commit"` for `strategy_name == "branch-prefix"` (Story 2.1 will extend to `"no_conforming_commit"` for `"conventional-commits"`).
+  - [x] 2.7 Wire the short-circuits: `already_tagged` (AC3) before `strategy.decide`; `no_tags` (AC5) when `_pick_latest_semver_tag` returns `None`; `no_merge_commit` (AC4) when `bump is Bump.NONE`.
+  - [x] 2.8 Emit progress lines via `output.progress(...)` between steps (no progress emission inside no-op short-circuits except the entrypoint status line, to keep `--json` runs fully quiet).
+  - [x] 2.9 Call `output.emit(result)` exactly once at the end and `return result` so unit tests can assert on the return value without parsing streams.
 
-- [ ] **Task 3: Author `semvertag/ioc.py` Groups (AC1)**
-  - [ ] 3.1 Module-level imports: `import typing; import modern_di; from modern_di import providers, Scope; from semvertag._settings import Settings`. NO imports from `semvertag.providers.*` or `semvertag.strategies.*` at module scope — those are lazy inside creator functions (architecture §Import Style line 961).
-  - [ ] 3.2 Declare `SettingsGroup(modern_di.Group)` with `settings = providers.Factory(scope=Scope.APP, creator=Settings)`. The entrypoint will supersede this via the container's `context={Settings: post_overlay_settings}` parameter — see Dev Notes §Container construction.
-  - [ ] 3.3 Declare `OutputsGroup(modern_di.Group)` with `rich_output` and `json_output` factories; creators take `settings: Settings` and call `_output.build_rich_output(quiet=...)` / `_output.build_json_output(quiet=...)`. The `quiet` flag flows from `settings` — see Dev Notes §Output selection.
-  - [ ] 3.4 Declare `ProvidersGroup(modern_di.Group)` with `gitlab_provider = providers.Factory(scope=Scope.APP, creator=_build_gitlab_provider)`. The `_build_gitlab_provider(settings: Settings) -> Provider` creator: lazy-imports `RetryingTransport` and `GitLabProvider`; constructs the `httpx2.Client`; raises `ConfigError("Project id missing. Set CI_PROJECT_ID or pass --project-id.")` if `settings.project_id is None`.
-  - [ ] 3.5 Declare `StrategiesGroup(modern_di.Group)` with `branch_prefix_strategy = providers.Factory(scope=Scope.APP, creator=_build_branch_prefix_strategy)`. Creator returns `BranchPrefixStrategy(config=settings.branch_prefix)` after lazy-importing.
-  - [ ] 3.6 Optional but recommended: add `UseCasesGroup` with `semvertag_use_case = providers.Factory(scope=Scope.APP, creator=SemvertagUseCase)` so the entrypoint resolves a single `SemvertagUseCase` instance — modern-di will wire `provider`, `strategy`, `output` automatically from the Protocol-typed parameter signatures. (Verify by reading `modern-di-typer/tests/test_commands.py` for the dependency-resolution pattern.)
-  - [ ] 3.7 Export `ALL_GROUPS: typing.Final[list[type[modern_di.Group]]] = [SettingsGroup, OutputsGroup, ProvidersGroup, StrategiesGroup, UseCasesGroup]` (omit `UseCasesGroup` if Task 3.6 skipped — explain why in dev notes).
-  - [ ] 3.8 Add `build_container(settings: Settings, *, inner_transport: httpx2.BaseTransport | None = None) -> modern_di.Container` factory function that constructs the container with `context={Settings: settings}` and (when `inner_transport` is provided) registers an override for the http client factory. This is the **test integration seam** — see Dev Notes.
+- [x] **Task 3: Author `semvertag/ioc.py` Groups (AC1, AC6.5)**
+  - [x] 3.1 Module-level imports: `import typing; import modern_di; from modern_di import providers, Scope; from semvertag._settings import Settings; from semvertag._use_case import SemvertagUseCase`. NO imports from `semvertag.providers.*` or `semvertag.strategies.*` at module scope — those are lazy inside creator functions (architecture §Import Style line 961).
+  - [x] 3.2 Declare `SettingsGroup(modern_di.Group)` with `settings = providers.Factory(scope=Scope.APP, creator=Settings)`. The entrypoint supersedes this via the container's `context={Settings: post_overlay_settings}` parameter — see Dev Notes §Container construction.
+  - [x] 3.3 Declare `OutputsGroup(modern_di.Group)` with `rich_output` and `json_output` factories; creators take `settings: Settings` and return `_output.build_rich_output(quiet=settings.quiet)` / `_output.build_json_output(quiet=settings.quiet)`.
+  - [x] 3.4 Declare `ProvidersGroup(modern_di.Group)` with `gitlab_provider = providers.Factory(scope=Scope.APP, creator=_build_gitlab_provider, cache_settings=providers.CacheSettings(finalizer=lambda p: p.client.close()))`. The `_build_gitlab_provider(settings: Settings) -> GitLabProvider` creator: lazy-imports `RetryingTransport` and `GitLabProvider`; constructs the `httpx2.Client(transport=RetryingTransport(inner=None), ...)`; raises `ConfigError("Project id missing. Set CI_PROJECT_ID or pass --project-id.")` if `settings.project_id is None`. The `CacheSettings.finalizer` closes the http client when the container exits its `with` block.
+  - [x] 3.5 Declare `StrategiesGroup(modern_di.Group)` with `branch_prefix_strategy = providers.Factory(scope=Scope.APP, creator=_build_branch_prefix_strategy)`. Creator returns `BranchPrefixStrategy(config=settings.branch_prefix)` after lazy-importing.
+  - [x] 3.6 Declare `UseCasesGroup(modern_di.Group)` with `semvertag_use_case = providers.Factory(scope=Scope.APP, creator=SemvertagUseCase, kwargs={"provider": ProvidersGroup.gitlab_provider, "strategy": StrategiesGroup.branch_prefix_strategy, "output": OutputsGroup.rich_output})`. **The `output` kwarg defaults to `rich_output`**; `build_container(settings, *, json=False)` swaps to `json_output` by registering an override on the container's `overrides_registry` — see Dev Notes §Output selection. This explicit `kwargs={...}` wiring is mandatory because the use case's field types (`Provider`, `BumpStrategy`, `Output`) are Protocols that modern-di cannot auto-resolve to concrete Factories (C2 fix).
+  - [x] 3.7 Export `ALL_GROUPS: typing.Final[list[type[modern_di.Group]]] = [SettingsGroup, OutputsGroup, ProvidersGroup, StrategiesGroup, UseCasesGroup]`.
+  - [x] 3.8 Add `build_container(settings: Settings, *, json: bool = False, inner_transport: httpx2.BaseTransport | None = None) -> modern_di.Container` factory function: constructs the container with `context={Settings: settings}`; when `json=True`, registers an override on `container.overrides_registry` mapping `UseCasesGroup.semvertag_use_case`'s `output` kwarg to `OutputsGroup.json_output`; when `inner_transport` is provided, registers an override on `ProvidersGroup.gitlab_provider`'s creator that passes the test transport. This is the **test integration seam** — see Dev Notes §Test integration seam for the exact `overrides_registry` API.
 
-- [ ] **Task 4: Author `semvertag/__main__.py` Typer entrypoint (AC6, AC7, AC10)**
-  - [ ] 4.1 Module preamble per architecture §Module-Level Constants: `MAIN_APP: typing.Final = typer.Typer(name="semvertag", help="...", no_args_is_help=False, add_completion=True)`.
-  - [ ] 4.2 Define the single `main` callback (Typer "command" or "callback" — callback works for a single-verb CLI; subcommand pattern arrives in Story 3.2 for `doctor`). Signature: takes all flags from AC6 as `typer.Option` defaults; takes no positional args (FR33).
-  - [ ] 4.3 Inside `main()`: env-resolve `Settings()`; collect non-None CLI flag values into a `dict[str, tuple[Any, str]]` matching `apply_cli_overlay` signature (`{"project_id": (value, "--project-id"), "strategy": (value, "--strategy"), ..., "gitlab.endpoint": (value, "--gitlab-endpoint"), "gitlab.token": (pydantic.SecretStr(value), "--token")}`); call `apply_cli_overlay(settings, overrides)`.
-  - [ ] 4.4 Construct the container via `ioc.build_container(settings)`; resolve `SemvertagUseCase` (or compose it manually from resolved Provider/Strategy/Output if Task 3.6 was skipped); call `use_case.run()` inside the container's `with` block (modern_di Container is a context manager — see `_autosemver_reference/__main__.py:35-36` for the precedent).
-  - [ ] 4.5 Wrap the resolve+run in a try/except: catch `SemvertagError`, route message through `output.error(str(err))`, then `raise typer.Exit(code=err.exit_code) from err`. (See Dev Notes §Exception → exit-code mapping for why the `from err` chaining matters per architecture §Exception Construction Patterns.)
-  - [ ] 4.6 Catch `BrokenPipeError` / `OSError` (e.g., `OSError` with `errno.EPIPE`) at the same boundary and silently exit 0 — resolves Story 1.3 deferred-work item.
-  - [ ] 4.7 Add the `--version` option (uses `typer.Option(..., callback=version_callback, is_eager=True)`); callback reads `importlib.metadata.version("semvertag")` and `typer.echo(version)` then `raise typer.Exit()`.
-  - [ ] 4.8 Add the `if __name__ == "__main__":` block invoking `MAIN_APP()` (allows `python -m semvertag` to work locally for debugging; matches `_autosemver_reference/__main__.py:34-36` pattern). Use `# pragma: no cover` on that block to match the reference precedent — it's exercised by the integration tests via CliRunner, not by import.
+- [x] **Task 4: Author `semvertag/__main__.py` Typer entrypoint (AC6, AC6.5, AC6.6, AC7, AC10)**
+  - [x] 4.1 Module preamble: `MAIN_APP: typing.Final = typer.Typer(name="semvertag", help="...", invoke_without_command=True, no_args_is_help=False, add_completion=True)`. The `invoke_without_command=True` + `no_args_is_help=False` combination is mandatory per AC6 so the callback fires on bare `semvertag` and Story 3.2's `doctor` subcommand can be added later without restructure.
+  - [x] 4.2 Define the dispatch as a Typer **callback** (NOT a command): `@MAIN_APP.callback()` + `@modern_di_typer.inject` decorators stacked. Take `ctx: typer.Context` as the first parameter; if `ctx.invoked_subcommand is not None`, return immediately (the subcommand handles its own run — Story 3.2). The signature carries all flags from AC6 as `typer.Option(default, "--flag-name")` defaults plus one DI-injected parameter: `use_case: typing.Annotated[SemvertagUseCase, modern_di_typer.FromDI(UseCasesGroup.semvertag_use_case)]`. **This `@inject` + `FromDI(...)` pattern is the canonical modern-di-typer entry — do NOT call `container.resolve(...)` directly** (`_autosemver_reference/__main__.py:22-32` precedent).
+  - [x] 4.3 Inside the callback body, **before** the try/except: env-resolve `Settings()`; collect non-None CLI flag values into the `apply_cli_overlay` dict. **For `--token`, wrap as `pydantic.SecretStr(token_value)`** (required so the SecretStr defense-in-depth holds; do NOT pass the raw string). Examples: `{"project_id": (value, "--project-id"), "strategy": (value, "--strategy"), "gitlab.token": (pydantic.SecretStr(value), "--token"), "default_branch": (value, "--default-branch"), "quiet": (True, "--quiet")}` — omit entries whose CLI value is `None`. Call `apply_cli_overlay(settings, overrides)` to produce the post-overlay `settings`.
+  - [x] 4.4 Construct the container via `ioc.build_container(settings, json=json_flag)`. Because the callback uses `@modern_di_typer.inject`, the framework resolves `use_case` via the `FromDI(UseCasesGroup.semvertag_use_case)` annotation — you do NOT call `container.resolve(...)` manually. Wrap the `use_case.run()` invocation in a `with container:` block (modern_di `Container` is a context manager — `_autosemver_reference/__main__.py:35-36` precedent — so the `CacheSettings` finalizer for the http client fires at end of scope).
+  - [x] 4.5 Wrap the `Settings()` + `apply_cli_overlay` + `build_container` + `use_case.run()` block in a try/except chain in this exact order: (i) catch `pydantic.ValidationError` and `ValueError` (from `apply_cli_overlay`) → re-raise as `ConfigError(<named-actionable message assembled from exc.errors()[0]>)`; (ii) catch `SemvertagError` → route message through `output.error(str(err))`, then `raise typer.Exit(code=err.exit_code) from err`; (iii) catch `BrokenPipeError` and `OSError` with `errno.EPIPE` → `raise typer.Exit(code=0) from None`. **Construct the `output` instance BEFORE the try-block** (so the `except SemvertagError` clause has access to it — see Dev Notes §Exception → exit-code mapping). All other exceptions bubble to Typer's default handler.
+  - [x] 4.6 (Notes on `from err` vs `from None`.) `from err` for `SemvertagError` preserves `__cause__` for debugging; `from None` for `BrokenPipeError` suppresses the `__context__` chain so `semvertag | head -1` produces a clean exit. Architecture §Exception Construction Patterns lines 791–802.
+  - [x] 4.7 Add the `--version` option as `typer.Option(None, "--version", callback=_version_callback, is_eager=True)`; the callback reads `importlib.metadata.version("semvertag")` and `typer.echo(version)` then `raise typer.Exit()`. **Note:** `importlib.metadata.version` reads from the installed-package's `dist-info`, NOT from `pyproject.toml` directly. `uv run semvertag --version` and `uvx semvertag --version` work; ad-hoc `python semvertag/__main__.py --version` would raise `PackageNotFoundError` — acceptable since semvertag is intended to be installed. Current version string reads `"0"` (pyproject.toml:18); Story 4.2 wires PyPI trusted publishing and real release versions.
+  - [x] 4.8 Add the `if __name__ == "__main__":` block invoking `MAIN_APP()` (allows `python -m semvertag` to work locally for debugging; matches `_autosemver_reference/__main__.py:34-36` pattern). Use `# pragma: no cover` on that block — exercised by integration tests via CliRunner, not by import.
+  - [x] 4.9 For `--strategy` and `--provider` flags, pass the CLI value through as a plain `str` — do NOT use Typer `Enum` enforcement. pydantic's `Literal[...]` validation on the Settings fields (`_settings.py:57-58`) rejects bad values with `ValidationError`, which 4.5's try-chain catches and re-raises as `ConfigError` (exit 2). Centralizes the rejection logic in pydantic so error messages stay consistent.
 
-- [ ] **Task 5: Integration tests — main verb (AC8)**
-  - [ ] 5.1 Create `tests/integration/test_cli_main_verb.py` with module preamble `_RUNNER: typing.Final = CliRunner(mix_stderr=False)` (separate stdout/stderr — required for FR38 assertions).
-  - [ ] 5.2 Add a `@pytest.fixture` for `cli_env(monkeypatch)` that sets `SEMVERTAG_TOKEN`, `SEMVERTAG_PROJECT_ID`, `SEMVERTAG_GITLAB__ENDPOINT` to the values from `tests/conftest.py` so the CLI can resolve settings without explicit flags. (Use `monkeypatch.setenv` per pytest convention.)
-  - [ ] 5.3 Add a `@pytest.fixture` for `cli_container(monkeypatch)` that monkeypatches `ioc.build_container` (or directly patches the http client construction inside `_build_gitlab_provider`) so tests can inject `MockTransport` per AC8. **Alternative pattern (recommended):** add a `SEMVERTAG_INNER_TRANSPORT` sentinel attribute on a test-only module that `_build_gitlab_provider` consults — but this leaks test plumbing into production code. The clean pattern is `monkeypatch.setattr(ioc, "build_container", lambda s: real_build_container(s, inner_transport=transport))` — keeps production code unaware of tests. **See Dev Notes §Test integration seam for the recommended choice.**
-  - [ ] 5.4 Implement the five tests listed in AC8 using `compose_handler` from `tests/conftest.py` to override individual endpoints.
-  - [ ] 5.5 Each test asserts `result.exit_code`, `result.stdout`, and (where applicable) `result.stderr` separately; use `result.stdout.strip().splitlines()` to assert line counts for `--json` tests.
+- [x] **Task 5: Integration tests — main verb (AC8)**
+  - [x] 5.1 Create `tests/integration/test_cli_main_verb.py` with module preamble `_RUNNER: typing.Final = CliRunner(mix_stderr=False)` (separate stdout/stderr — required for FR38 assertions).
+  - [x] 5.2 Add a `@pytest.fixture` for `cli_env(monkeypatch)` that sets `SEMVERTAG_TOKEN`, `SEMVERTAG_PROJECT_ID`, `SEMVERTAG_GITLAB__ENDPOINT` to the values from `tests/conftest.py` so the CLI can resolve settings without explicit flags. (Use `monkeypatch.setenv` per pytest convention.)
+  - [x] 5.3 Add a `@pytest.fixture` for `cli_container(monkeypatch)` that monkeypatches `ioc.build_container` (or directly patches the http client construction inside `_build_gitlab_provider`) so tests can inject `MockTransport` per AC8. **Alternative pattern (recommended):** add a `SEMVERTAG_INNER_TRANSPORT` sentinel attribute on a test-only module that `_build_gitlab_provider` consults — but this leaks test plumbing into production code. The clean pattern is `monkeypatch.setattr(ioc, "build_container", lambda s: real_build_container(s, inner_transport=transport))` — keeps production code unaware of tests. **See Dev Notes §Test integration seam for the recommended choice.**
+  - [x] 5.4 Implement the five tests listed in AC8 using `compose_handler` from `tests/conftest.py` to override individual endpoints.
+  - [x] 5.5 Each test asserts `result.exit_code`, `result.stdout`, and (where applicable) `result.stderr` separately; use `result.stdout.strip().splitlines()` to assert line counts for `--json` tests.
 
-- [ ] **Task 6: Integration tests — quiet/json matrix and exit codes (AC9)**
-  - [ ] 6.1 Create `tests/integration/test_cli_quiet_json_matrix.py` with the same `_RUNNER` and fixtures from Task 5 (extract them to `tests/integration/conftest.py` if both files use them).
-  - [ ] 6.2 Implement the four quiet/json cells per AC9's table.
-  - [ ] 6.3 Implement the five exit-code tests:
+- [x] **Task 6: Integration tests — quiet/json matrix and exit codes (AC9)**
+  - [x] 6.1 Create `tests/integration/test_cli_quiet_json_matrix.py` with the same `_RUNNER` and fixtures from Task 5 (extract them to `tests/integration/conftest.py` if both files use them).
+  - [x] 6.2 Implement the four quiet/json cells per AC9's table.
+  - [x] 6.3 Implement the five exit-code tests:
     - `test_exits_with_one_on_generic_semvertag_error` — `monkeypatch` `SemvertagUseCase.run` to raise `SemvertagError("synthetic generic failure for AC9.")`.
     - `test_exits_with_two_on_config_error_via_404` — override `GET /api/v4/projects/{id}` to 404; assert exit 2 and the redacted error message ends with `Verify CI_PROJECT_ID or --project-id.` (matches `gitlab.py:306`).
     - `test_exits_with_three_on_auth_error_via_401` — override to 401; assert exit 3 and the error message starts with `Token rejected: 401.`.
     - `test_exits_with_four_on_provider_api_error_via_503_after_retry_exhaustion` — override every GET to 503; monkeypatch `_transport.time.sleep` and `_transport.random.uniform` to no-ops (see `tests/integration/test_gitlab_provider.py:848-849, 862-863, 876-877` for the precedent); assert exit 4.
 
-- [ ] **Task 7: `Justfile`, `pyproject.toml`, and `_bmad/deferred-work.md` updates (AC10, AC11)**
-  - [ ] 7.1 No changes expected to `pyproject.toml` `[project.scripts]` — line 29 already declares it correctly.
-  - [ ] 7.2 Confirm `Justfile::test` recipe (`uv run --no-sync pytest {{ args }}`) does not need adjustment — `addopts = "--cov=. --cov-report term-missing"` from `pyproject.toml:83` already exercises the new integration tests under coverage.
-  - [ ] 7.3 If you find `setup-uv` cache issues in CI (Story 1.1 deferred-work line 17), do NOT fix here — it is Story 4.1's scope.
-  - [ ] 7.4 Append a new section `## Deferred from: story 1-7-wire-di-groups-and-typer-entrypoint (<DATE>)` to `_bmad/deferred-work.md` and record:
+- [x] **Task 7: `Justfile`, `pyproject.toml`, and `_bmad/deferred-work.md` updates (AC10, AC11)**
+  - [x] 7.1 No changes expected to `pyproject.toml` `[project.scripts]` — line 29 already declares it correctly.
+  - [x] 7.2 Confirm `Justfile::test` recipe (`uv run --no-sync pytest {{ args }}`) does not need adjustment — `addopts = "--cov=. --cov-report term-missing"` from `pyproject.toml:83` already exercises the new integration tests under coverage.
+  - [x] 7.3 If you find `setup-uv` cache issues in CI (Story 1.1 deferred-work line 17), do NOT fix here — it is Story 4.1's scope.
+  - [x] 7.4 Append a new section `## Deferred from: story 1-7-wire-di-groups-and-typer-entrypoint (<DATE>)` to `_bmad/deferred-work.md` and record:
     - Any non-blocking decisions you took (e.g., "did NOT add a `--no-color` flag; deferred to v1.x per architecture §Configuration Resolution v1.x layer").
     - The `output_format` selection mechanism trade-off you picked (see Dev Notes §Output selection).
     - The container's http client lifecycle approach you chose (Dev Notes §Client lifecycle).
 
-- [ ] **Task 8: Run the full local validation gate (AC11)**
-  - [ ] 8.1 `just install` (fresh sync).
-  - [ ] 8.2 `just lint-ci` — must be clean.
-  - [ ] 8.3 `just test` — full suite must pass; coverage ≥85%.
-  - [ ] 8.4 `just test-branch-strategies` — Story 1.6 gate must report 100% branch on `branch_prefix.py`.
-  - [ ] 8.5 `uv run ty check` — clean.
-  - [ ] 8.6 `uv build` — clean.
-  - [ ] 8.7 `uv run semvertag --help` — confirm AC6's flag list appears.
-  - [ ] 8.8 `uv run python -m semvertag --help` — same output.
-  - [ ] 8.9 Update `_bmad/sprint-status.yaml`: `1-7-wire-di-groups-and-typer-entrypoint: ready-for-dev` → `in-progress` → `review` (the bmad-code-review step bumps to `done`).
-  - [ ] 8.10 Update this story file: tick all task/subtask checkboxes; fill in Dev Agent Record sections; bump Status to `review`.
+- [x] **Task 8: Run the full local validation gate (AC11)**
+  - [x] 8.1 `just install` (fresh sync).
+  - [x] 8.2 `just lint-ci` — must be clean.
+  - [x] 8.3 `just test` — full suite must pass; coverage ≥85%.
+  - [x] 8.4 `just test-branch-strategies` — Story 1.6 gate must report 100% branch on `branch_prefix.py`.
+  - [x] 8.5 `uv run ty check` — clean.
+  - [x] 8.6 `uv build` — clean.
+  - [x] 8.7 `uv run semvertag --help` — confirm AC6's flag list appears.
+  - [x] 8.8 `uv run python -m semvertag --help` — same output.
+  - [x] 8.9 Update `_bmad/sprint-status.yaml`: `1-7-wire-di-groups-and-typer-entrypoint: ready-for-dev` → `in-progress` → `review` (the bmad-code-review step bumps to `done`).
+  - [x] 8.10 Update this story file: tick all task/subtask checkboxes; fill in Dev Agent Record sections; bump Status to `review`.
+
+### Review Findings
+
+<!-- Code review run: 2026-05-28 — bmad-code-review (Blind Hunter + Edge Case Hunter + Acceptance Auditor) -->
+
+#### Decisions Needed — RESOLVED
+
+- [x] [Review][Decision][Resolved → patch] `--provider github`/`bitbucket` silently wired GitLab. **Decision:** fail-fast with `ConfigError` at `build_container` boundary. Applied at `semvertag/ioc.py:138-140`.
+- [x] [Review][Decision][Resolved → patch] `--strategy conventional-commits` silently ran `BranchPrefixStrategy`. **Decision:** fail-fast with `ConfigError` at `build_container` boundary until Story 2.1 wires the alternate strategy. Applied at `semvertag/ioc.py:141-143`.
+- [x] [Review][Decision][Resolved → patch] `SEMVERTAG_QUIET=true` was read into `settings.quiet` but the runtime `output` ignored it. **Decision:** honor env by deriving `output` from `settings.quiet` after `apply_cli_overlay`; the pre-overlay window keeps a CLI-flag-derived `output` for early errors. Applied at `semvertag/__main__.py:130, 147`.
+
+#### Patches (applied)
+
+- [x] [Review][Patch] Narrowed broad `except ValueError`: overlay-only ValueErrors now wrap into `ConfigError`; programming bugs (e.g., `_compute_new_version`'s `ValueError`) no longer surface as exit 2 [`semvertag/__main__.py:142-145`].
+- [x] [Review][Patch] Added `except ImportError → ConfigError` at the entrypoint chain so lazy-import failures route through the documented exit-2 path [`semvertag/__main__.py:152-155`].
+- [x] [Review][Patch] `_run_with_output_override` now uses `dataclasses.replace(use_case, output=output)` instead of re-constructing the frozen dataclass [`semvertag/__main__.py:168-169`].
+- [x] [Review][Patch] `build_container` no longer pre-resolves `json_output` via `resolve_provider`; the override path constructs the JSON output directly, avoiding the dual-cache-entry [`semvertag/ioc.py:148-150`].
+- [x] [Review][Patch] Hoisted the autouse `_clean_env_before_each` fixture into `tests/integration/conftest.py` with the union env-var list [`tests/integration/conftest.py:23-39`]. Removed duplicates from `test_cli_main_verb.py` and `test_cli_quiet_json_matrix.py`.
+- [x] [Review][Patch] Renamed the `json` parameter in `_main_callback` and `_build_output_for_flags` to `json_flag` so the parameter no longer shadows the stdlib `json` module [`semvertag/__main__.py:77, 114`].
+- [ ] [Review][Patch][Dismissed] `ConfigError` wrapping by modern-di — verified `modern_di.providers.Factory.resolve()` does NOT wrap creator exceptions (only catches `ResolutionError` from sub-resolution). `test_exits_with_two_when_project_id_missing` already pins direct propagation. No patch needed.
+- [x] [Review][Patch] Lifted `semvertag._output` and `semvertag._transport` imports in `ioc.py` to module scope (they are shared internals, not provider/strategy modules; lazy imports were unjustified) [`semvertag/ioc.py:7-11`]. The provider/strategy module lazy imports remain (architecturally mandated).
+
+#### Deferred (recorded in `_bmad/deferred-work.md`)
+
+- [x] [Review][Defer] `JsonOutput.emit` skips token redaction [`semvertag/_output.py:47-50`] — deferred, pre-existing (do-not-touch in this story; already noted in Story 1.3 deferred-work).
+- [x] [Review][Defer] `_redact.py` token-body length floor of 20 chars leaks short malformed tokens [`semvertag/_redact.py:6-11`] — deferred, pre-existing (Story 1.3 scope).
+- [x] [Review][Defer] `Console(stderr=True)` may emit ANSI escapes under `FORCE_COLOR=1` [`semvertag/_output.py:69, 76`] — deferred, pre-existing (do-not-touch).
+- [x] [Review][Defer] `_pick_latest_semver_tag` behavior on prerelease/build-metadata tags is implementation-defined [`semvertag/_use_case.py:94-99`] — deferred; no test covers it. FR8 acceptable as-is for v1.0.
+- [x] [Review][Defer] `_inject_top_level_aliases` treats `CI_PROJECT_ID=""` as unset (falsy filter) [`semvertag/_settings.py:97-105, 174-180`] — deferred; user falls through to `ConfigError("Project id missing")` which is acceptable.
+- [x] [Review][Defer] Missing regression test: CLI value survives revalidation in the presence of conflicting env [`semvertag/_settings.py:198-200`] — deferred test gap.
+- [x] [Review][Defer] Missing test: `--request-timeout` clamping via CLI overlay [`tests/unit/test_settings.py:84-100`] — deferred test gap.
+- [x] [Review][Defer] Missing test: `--json` formatting of `pydantic.ValidationError` errors at entrypoint [`semvertag/__main__.py:130-133`] — deferred; documented gap.
+- [x] [Review][Defer] `--version` falls back to `"0"` silently on `PackageNotFoundError` [`semvertag/__main__.py:30-36`] — deferred; current `pyproject.toml:18` ships `"0"` anyway. Story 4.2 (PyPI trusted publishing) supersedes.
 
 ## Dev Notes
 
@@ -266,24 +345,6 @@ class SemvertagUseCase:
 This story is **Step 7 of the architecture's Implementation Sequence** (architecture.md line 592). It closes Epic 1 — Foundation & First Auto-Tag (GitLab + branch-prefix) — by composing every primitive Stories 1.1–1.6 built into a single end-to-end `uvx semvertag` invocation. There is no new domain logic in this story; it is wiring, error-handling routing, and integration testing.
 
 The deliverable: a user in a GitLab CI job can run `uvx semvertag` (or `semvertag --json --quiet`) and get a semver tag created on the default branch, with FR37-stable exit codes and FR38-clean stream discipline. After this story, Journey 1 of the PRD is **deliverable in isolation** — Stories 2.1, 3.x, 4.x add capabilities (conventional-commits, doctor, trust surface) on top of an already-working product.
-
-### Architecture section pointers (for the dev agent's quick lookup)
-
-- §DI & Dependency Boundary — architecture.md lines 535–547 — Groups (`SettingsGroup`, `ProvidersGroup`, `StrategiesGroup`, `OutputsGroup`); lazy resolution; `[github]`/`[bitbucket]` packaging extras dropped from v1.0.
-- §Implementation Patterns §DI Group Conventions — lines 804–836 — Group naming (plural + `Group` suffix); `ALL_GROUPS` typing; active-selection-at-use-case-construction pattern (not via DI cleverness).
-- §Decision Impact Analysis §Implementation sequence — lines 584–595 — Step 7 wiring sits between Step 6 (strategies — Story 1.6) and Step 8 (doctor — Story 3.x).
-- §Integration Points & Data Flow §Startup data flow — lines 1222–1238 — the env+CLI→Settings→Container→Use Case chain (the exact path `__main__.py` implements).
-- §Integration Points & Data Flow §Main verb run-time flow — lines 1240–1268 — the `provider.get_default_branch` / `get_latest_commit_on_default_branch` / `list_tags` / `strategy.decide` / `create_tag` sequence the use case must implement.
-- §Integration Points & Data Flow §Error flow — lines 1288–1310 — the `httpx2.* → SemvertagError → typer.Exit(code=N)` chain; **`__main__.py` is the one place exit codes are mapped** (FR37, architecture §Cross-cutting concerns line 1216).
-- §Error Model & Exit Codes — lines 379–408 — exit-code-to-exception-subclass mapping (`SemvertagError`→1, `ConfigError`→2, `AuthError`→3, `ProviderAPIError`→4); redaction defense-in-depth (NFR10).
-- §Output Architecture — lines 410–439 — Output protocol; two `rich.Console` instances per impl; `--quiet` + `--json` additive composition (final result always emits); stream discipline (no interleaving).
-- §Configuration Resolution — lines 441–494 — Settings shape; CLI overlay via `.model_copy(update=...)`; `apply_cli_overlay` helper already implemented in `_settings.py:164-180`.
-- §CLI Flag Naming — lines 837–851 — `--project-id` (not `--project_id`); nested-config flags flatten to top-level kebab-case (`--gitlab-endpoint`, not `--gitlab.endpoint`); long-form only at v1.0.
-- §Provider Implementation Pattern — lines 972–1003 — GitLabProvider's `Provider` protocol surface; methods the use case calls: `get_default_branch`, `get_latest_commit_on_default_branch`, `list_tags`, `create_tag`.
-- §Strategy Implementation Pattern — lines 1005–1017 — BranchPrefixStrategy's frozen-dataclass shape; the `decide(commit) -> Bump` signature.
-- §Frozen-Dataclass Conventions — lines 695–727 — `frozen=True, slots=True, kw_only=True` for the new `SemvertagUseCase`.
-- §Project Structure §Complete Project Directory Structure — lines 1055–1167 — `__main__.py`, `_use_case.py`, `ioc.py` projected locations.
-- §Anti-Patterns to Avoid — lines 1039–1049 — every banned pattern, especially: `print()` outside `_output.py`; bare `Exception` catches; module-level singletons of stateful clients (the http client MUST be per-CLI-run-scoped — DI is correct here, module global is wrong); exit-code mapping outside `__main__.py`.
 
 ### Critical architectural constraints
 
@@ -311,49 +372,32 @@ The entrypoint constructs the container with the post-CLI-overlay Settings injec
 def build_container(
     settings: Settings,
     *,
+    json: bool = False,
     inner_transport: httpx2.BaseTransport | None = None,
 ) -> modern_di.Container:
-    context: dict[type, typing.Any] = {Settings: settings}
+    container = modern_di.Container(groups=ALL_GROUPS, context={Settings: settings})
+    if json:
+        container.overrides_registry.override(
+            provider=UseCasesGroup.semvertag_use_case,
+            kwarg="output",
+            with_=OutputsGroup.json_output,
+        )
     if inner_transport is not None:
-        context[httpx2.BaseTransport] = inner_transport
-    return modern_di.Container(groups=ALL_GROUPS, context=context)
+        container.overrides_registry.override(
+            provider=ProvidersGroup.gitlab_provider,
+            kwarg="transport",  # _build_gitlab_provider accepts an optional transport= kwarg
+            with_=inner_transport,
+        )
+    return container
 ```
 
-The `_build_gitlab_provider` creator then optionally pulls the inner transport from the context (or constructs a real `RetryingTransport()` if absent). This is the test integration seam — integration tests pass `inner_transport=httpx2.MockTransport(handler)` and production runs pass nothing.
-
-> **Verify** the `context={httpx2.BaseTransport: inner}` injection path actually resolves through modern-di's type-based lookup. If it doesn't (because modern-di only looks up by registered Factory bound_type, not arbitrary types), fall back to: have `_build_gitlab_provider` accept an optional `transport` parameter that defaults to `None`, and have `build_container` register an `httpx2.BaseTransport` Factory via `Container.overrides_registry` when a test transport is provided. The `modern_di/registries/overrides_registry.py` API is the production-side seam for this. **Pick whichever pattern actually works** — both are spec-compliant and Story 4.x's polishing scope.
+The `context={Settings: settings}` parameter is modern-di's first-class typed-instance injection seam (`modern_di/container.py:46`). The `overrides_registry` (`modern_di/registries/overrides_registry.py`) is the production-side seam for swapping kwargs at run time — used here for both the JSON output selection and the test transport injection. Both APIs are stable in modern-di's public surface.
 
 ### Output selection
 
-The Output factory dispatch (RichOutput vs JsonOutput) has two viable shapes:
+`OutputsGroup` exposes **two Factories** — `rich_output` and `json_output`. `UseCasesGroup.semvertag_use_case` binds `output` to `rich_output` by default. `build_container(settings, *, json=True)` swaps it to `json_output` via `overrides_registry` (above). This mirrors `ProvidersGroup`'s "one Factory per implementation" pattern and keeps the dispatch logic centralized in `build_container` instead of leaking into the use case or each output's creator.
 
-**Option A — single Factory with conditional creator:**
-
-```python
-class OutputsGroup(modern_di.Group):
-    output = providers.Factory(creator=_build_output)
-
-def _build_output(settings: Settings) -> Output:
-    if settings.output_format == "json":
-        return build_json_output(quiet=settings.quiet)
-    return build_rich_output(quiet=settings.quiet)
-```
-
-This requires `output_format` and `quiet` fields on `Settings`. Both can be set via CLI overlay only (no env-friendly representation — keep them as transient Settings fields with no env alias OR keep them outside Settings entirely and pass to `_build_output` via the container's context).
-
-**Option B — two Factories, entrypoint picks:**
-
-```python
-class OutputsGroup(modern_di.Group):
-    rich_output = providers.Factory(creator=_build_rich_output)
-    json_output = providers.Factory(creator=_build_json_output)
-```
-
-The entrypoint resolves the right one based on the `--json` flag.
-
-**Recommendation: Option B.** It mirrors the ProvidersGroup pattern (one Factory per implementation; entrypoint picks based on the CLI flag), keeps Settings free of presentation-layer concerns, and works without polluting Settings with transient fields. Pass `quiet` from the CLI to the creator via the container's context (`context={Settings: settings, "quiet": flag_value}`) **or** add `quiet: bool = False` to Settings — both work, but adding to Settings means it's recorded in provenance, which is useful for doctor.
-
-> Whichever you pick: document the choice in `_bmad/deferred-work.md` (Task 7.4) so Story 3.2 (`semvertag doctor`) knows how to re-use the same Output construction.
+The `quiet` flag lives on `Settings` as `quiet: bool = False` (no env alias — CLI-only). Both `_build_rich_output` and `_build_json_output` take `settings: Settings` as their resolved kwarg and read `settings.quiet`. Recording `quiet` on Settings ensures it surfaces in `_provenance` for Story 3.2's doctor config-section renderer.
 
 ### Test integration seam
 
@@ -393,7 +437,7 @@ def cli_env(monkeypatch: pytest.MonkeyPatch) -> None:
 @pytest.fixture
 def patched_container(monkeypatch: pytest.MonkeyPatch) -> collections.abc.Callable[[HandlerCallable], None]:
     """Returns a function that, given a MockTransport handler, monkeypatches ioc.build_container
-    so the produced container wires up the GitLabProvider against the handler."""
+    so the produced container wires up the GitLabProvider against the handler via overrides_registry."""
     real_build_container = ioc.build_container
 
     def install(handler: HandlerCallable) -> None:
@@ -401,11 +445,13 @@ def patched_container(monkeypatch: pytest.MonkeyPatch) -> collections.abc.Callab
         monkeypatch.setattr(
             ioc,
             "build_container",
-            lambda settings: real_build_container(settings, inner_transport=transport),
+            lambda settings, *, json=False: real_build_container(settings, json=json, inner_transport=transport),
         )
 
     return install
 ```
+
+The fixture preserves `--json` flag semantics by forwarding the kwarg, and injects `inner_transport` for every test that opts in.
 
 Then in tests:
 
@@ -475,20 +521,16 @@ For tests, `MockTransport` has no IO to close, so the finalizer is a no-op — s
 
 ### Learnings from Stories 1.1–1.6 (carried forward)
 
-[Source: 1-1, 1-2, 1-3, 1-4, 1-5, 1-6 — all Dev Agent Records + Review Findings]
+[Source: 1-1, 1-2, 1-3, 1-4, 1-5, 1-6 — Dev Agent Records + Review Findings]
 
-- **Architecture sketches leave seams unspecified.** Stories 1.2 (`model_validator(mode="before")` for AliasChoices), 1.3 (`error()` method on Output), 1.4 (`inner` injection seam on RetryingTransport), 1.5 (`_request_failed_message` helper), 1.6 (the `_pick_latest_semver_tag` shape we're recommending here) all added structural seams the sketches didn't name. **For this story:** expect to discover at least one additional seam — most likely around (a) how the container injects MockTransport (test seam), (b) how the entrypoint passes `quiet`/`output_format` to the Output factory, or (c) how `project_id=None` is gated (ConfigError at use-case start vs. at provider construction). Document each seam in Dev Notes + Debug Log References.
-- **Auto-typing-final aggressively rewrites code.** Pre-annotate `typing.Final` on every module-level constant — including in the new test files. Story 1.2's conftest got auto-rewritten unexpectedly when constants were missing the annotation.
-- **`tests/**/*.py` per-file-ignores include `S101` + `SLF001`** (pyproject.toml:80). New integration tests use `assert` freely (S101 ignore) and may need to reach into `_transport`/`ioc` internals for monkeypatching (SLF001 ignore covers that).
-- **`uv build` is a per-story acceptance bar** (Story 1.1 review patch). Run alongside `just test` before marking review (Task 8.6 covers this).
-- **Code-review cycle produces Patches / Deferred / Dismissed buckets.** Story 1.3 took 8 patches; Story 1.4 fewer; Story 1.5 took 17 patches plus 8 deferred items; Story 1.6 took 0 patches + 9 deferred. **This story is bigger than 1.6 (multiple new files, integration tests with real CLI invocations, container plumbing).** Expect a non-trivial patch count. Mitigate by hitting `just lint-ci` + `uv build` + `just test` clean before flipping to `review`.
-- **`# pragma: no cover` is a smell — get to coverage by writing real tests** (Story 1.5 lesson). Exception: the `if __name__ == "__main__":` block in `__main__.py` is the documented exception (matches `_autosemver_reference/__main__.py:34-36` precedent — the block is exercised by `python -m semvertag`, not by import-time test execution).
-- **`tests/conftest.py` (top-level) is the integration-fixture surface** (Story 1.5 introduced it). New integration tests **import from `tests.conftest`** (`GITLAB_PROJECT_ID`, `GITLAB_ENDPOINT`, `default_handler`, `compose_handler`) — do NOT redefine these constants locally.
-- **`tests/unit/conftest.py` exists** but unit tests do NOT depend on `tests/conftest.py` (Story 1.6 lesson). The story's integration tests live under `tests/integration/`, so `tests/conftest.py` IS available to them via standard pytest scoping. If you extract shared CLI fixtures, the natural home is a new `tests/integration/conftest.py`.
-- **`pytest -o "addopts="` in Justfile recipes overrides `pyproject.toml addopts` but NOT `PYTEST_ADDOPTS` env var** (Story 1.6 review note). This story does not introduce new Justfile recipes (Task 7.2 confirms), so the concern does not apply here.
-- **GitLab integration tests reach into `_transport` to monkeypatch `time.sleep` / `random.uniform`** (Story 1.5 deferred-work). The 5xx-retry test in AC9 must use the same pattern (`tests/integration/test_gitlab_provider.py:848-849, 862-863, 876-877` for the precedent).
-- **Settings-layer fields with default values are backward-compat additions** (Story 1.2 stability stance). Adding `project_id: int | None = None` in Task 1.1 does NOT break Story 1.2's 10 settings tests; verify with `just test tests/unit/test_settings.py` before proceeding.
-- **AliasChoices vs. manual env-resolution split** (Story 1.2 deferred-work). `_settings.py` already has both: token aliases use the `model_validator(mode="before")` + `_TOKEN_ALIASES_BY_PATH` pattern; non-token fields use pydantic-settings' built-in env resolution. For `project_id` + `CI_PROJECT_ID`, the cleanest path is to extend the token-alias pattern (it surfaces in `_provenance` correctly out of the box) — but `validation_alias=pydantic.AliasChoices(...)` would also work if you handle provenance recording separately. Pick whichever surfaces in `_provenance` correctly without a refactor; document the choice.
+- **Architecture sketches leave seams unspecified.** Every prior story added one or two structural seams the sketch didn't name (1.2 `model_validator`; 1.3 `Output.error()`; 1.4 `inner` injection; 1.5 `_request_failed_message`). **For this story:** expect new seams around the test transport injection, the JSON-output dispatch, and `project_id=None` gating. Document each in Debug Log References.
+- **Pre-annotate `typing.Final` on every module-level constant** — including in new test files. Otherwise auto-typing-final rewrites code unexpectedly (Story 1.2 conftest precedent).
+- **`tests/**/*.py` per-file-ignores cover `S101` + `SLF001`** (pyproject.toml:80) — `assert` and private-attr reach-in are fair game in tests.
+- **`uv build` is a per-story acceptance bar** (Story 1.1). Run alongside `just test` and `just lint-ci` before flipping to `review` — Task 8.6 covers this. Story-1.5/1.6 review patch counts (17 + 8 deferred / 0 + 9 deferred) shrink with rigorous Dev Notes; expect non-trivial patches here given the integration-test surface.
+- **`# pragma: no cover` is a smell except for the `if __name__ == "__main__":` block** (Story 1.5 lesson + `_autosemver_reference/__main__.py:34-36` precedent).
+- **`tests/conftest.py` is the integration-fixture surface** (Story 1.5). Import `GITLAB_PROJECT_ID`, `GITLAB_ENDPOINT`, `default_handler`, `compose_handler` from there — do NOT redefine locally. Unit tests don't depend on it; integration tests do (standard pytest scoping). If you extract CLI fixtures, the home is a NEW `tests/integration/conftest.py`.
+- **`_transport.time.sleep` / `random.uniform` monkeypatching** is the established no-sleep test pattern for retry-exhaustion (`tests/integration/test_gitlab_provider.py:848-849, 862-863, 876-877`). AC9's exit-4 test reuses it.
+- **Settings field additions with defaults are backward-compat** (Story 1.2 stability stance). Adding `project_id` and `quiet` in Task 1 does NOT break Story 1.2's 10 settings tests — verify with `just test tests/unit/test_settings.py` before proceeding. For `CI_PROJECT_ID` aliasing, extend the existing `_TOKEN_ALIASES_BY_PATH` pattern (it surfaces in `_provenance` correctly); pydantic's `validation_alias` would bypass provenance recording.
 
 ### Coverage interaction
 
@@ -521,14 +563,14 @@ This story's new files have the following coverage targets:
 | File | Action | Notes |
 |---|---|---|
 | `semvertag/_use_case.py` | **NEW** | `SemvertagUseCase` frozen dataclass; `run() -> RunResult` orchestration. |
-| `semvertag/ioc.py` | **NEW** | Four `modern_di.Group` subclasses + `UseCasesGroup`; `ALL_GROUPS`; `build_container(settings, *, inner_transport=None)` helper. |
-| `semvertag/__main__.py` | **NEW** | Typer entrypoint; `MAIN_APP` constant; `main` callback with all flags; exception→exit-code conversion; `--version`; `--install-completion` (typer built-in); `python -m semvertag` invocation block. |
-| `semvertag/_settings.py` | **UPDATE** | Add `project_id: int | None = None`; extend env-alias machinery to handle `CI_PROJECT_ID` → `SEMVERTAG_PROJECT_ID`. **Do NOT rename / re-default any existing field.** Story 1.2 regression canary must hold. |
+| `semvertag/ioc.py` | **NEW** | Five Groups (`SettingsGroup`, `OutputsGroup`, `ProvidersGroup`, `StrategiesGroup`, `UseCasesGroup`); `ALL_GROUPS`; `build_container(settings, *, json=False, inner_transport=None)` helper using `overrides_registry`. |
+| `semvertag/__main__.py` | **NEW** | Typer entrypoint with `invoke_without_command=True` callback; all flags from AC6; pydantic-ValidationError → ConfigError translation; SemvertagError → typer.Exit; BrokenPipeError silent exit; `--version` via `importlib.metadata`; `python -m semvertag` invocation block. |
+| `semvertag/_settings.py` | **UPDATE** | Add `project_id: int | None = None` + `quiet: bool = False` top-level fields; extend env-alias machinery to handle `CI_PROJECT_ID` → `SEMVERTAG_PROJECT_ID`. **Do NOT rename / re-default any existing field.** Story 1.2 regression canary must hold. |
 | `tests/integration/conftest.py` | **NEW** (recommended) | `_RUNNER` constant; `cli_runner`, `cli_env`, `patched_container` fixtures shared by the two new test files. |
 | `tests/integration/test_cli_main_verb.py` | **NEW** | Five tests covering AC8. |
 | `tests/integration/test_cli_quiet_json_matrix.py` | **NEW** | Nine tests covering AC9 (4 cells + 5 exit codes). |
-| `tests/unit/test_settings.py` | **UPDATE** | Add 2–3 tests for `project_id` + `CI_PROJECT_ID` alias resolution (Task 1.3). |
-| `tests/unit/test_provenance.py` | **UPDATE** | Add provenance test for `project_id` (env via `SEMVERTAG_PROJECT_ID` vs env via `CI_PROJECT_ID` vs cli via `--project-id` vs default `None`). |
+| `tests/unit/test_settings.py` | **UPDATE** | Tests for `project_id` + `CI_PROJECT_ID` alias resolution and `quiet` field defaults (Task 1.4). |
+| `tests/unit/test_provenance.py` | **UPDATE** | Provenance tests covering `project_id` (env + CI fallback + CLI + default), `default_branch` (CLI), and `quiet` (CLI) — Story 3.2 doctor consumes these (Task 1.5). |
 | `pyproject.toml` | **NO CHANGE** | `[project.scripts] semvertag = "semvertag.__main__:main"` already declared (line 29). |
 | `Justfile` | **NO CHANGE** | Existing `test` recipe covers the new integration tests. |
 | `_bmad/sprint-status.yaml` | **UPDATE** | `1-7-…: ready-for-dev` → `in-progress` → `review`; bump `last_updated_note`. |
@@ -591,6 +633,7 @@ After this story:
 - [Source: modern-di-typer/tests/test_commands.py:13-72] — `@inject` + `FromDI(...)` patterns
 - [Source: modern-di/modern_di/container.py:30-55] — `Container(context={Settings: instance})` injection mechanism
 - [Source: modern-di/modern_di/providers/factory.py:32-60] — `Factory(creator=..., scope=Scope.APP, cache_settings=...)` API; type-parsed kwargs from creator signature
+- [Source: modern-di/modern_di/registries/overrides_registry.py] — `Container.overrides_registry.override(provider, kwarg, with_)` API for swapping kwargs at run time (used for both `--json` output dispatch and test transport injection in this story)
 - [Source: semvertag/_settings.py:164-180] — `apply_cli_overlay(settings, overrides)` signature; `(value, "--flag-name")` tuple format
 - [Source: tests/conftest.py:1-69] — integration-fixture surface; `GITLAB_PROJECT_ID = 999`; `default_handler`; `compose_handler`; `gitlab_client` fixture pattern
 - [Source: tests/integration/test_gitlab_provider.py:848-849, 862-863, 876-877] — `monkeypatch.setattr(_transport.time, "sleep", lambda *_: None)` precedent for fast retry-exhaustion tests
@@ -609,8 +652,59 @@ claude-opus-4-7 (1M context) — bmad-dev-story workflow
 
 ### Debug Log References
 
+- **modern-di-typer `@inject` was abandoned in `__main__.py`.** The decorator reads the container from `app.info.context_settings["obj"]["di_container"]` set at `setup_di(...)` time, but this story builds the container per-invocation after CLI overlay. Resolution: drop `@inject`, build the container inline in the callback, and resolve `UseCasesGroup.semvertag_use_case` via `container.resolve_provider(...)`. Documented in deferred-work.
+- **The `Output` instance must be constructed BEFORE the try/except in `__main__.py`** so the `except SemvertagError` handler can call `output.error(...)`. But the use case factory wires `output=OutputsGroup.rich_output` at Factory-declaration time. To reconcile, the entrypoint constructs its own `output` instance via `_build_output_for_flags(quiet, json)` before the try-block, then `_run_with_output_override` rebuilds the resolved `SemvertagUseCase` with the entrypoint's output. Documented in deferred-work as a v1.x refactor candidate.
+- **`skip_creator_parsing=True` on every `ioc.py` Factory** silences `UserWarning: Failed to resolve type hints` triggered by the architecture-mandated lazy provider/strategy imports. modern-di's auto-wiring-by-type is disabled as a side effect, so every cross-Group dependency is spelled out in `kwargs={...}`. Trade-off accepted: explicit wiring is clearer than reading the auto-resolver's type-parsing logic.
+- **`PLC0415 import-not-at-top-of-file`** had to be `# noqa`-suppressed on every lazy import in `ioc.py` (six suppressions). The architecture (§Import Style line 961) explicitly mandates the lazy pattern, but ruff's ALL rule set picks it up.
+- **`PLR0913 too-many-arguments`** suppression on `_collect_overrides` — 8 keyword-only parameters mirror the 8 CLI flags. Splitting into a struct would just reify the same data shape.
+- **`PERF203 try/except in loop`** in `_pick_latest_semver_tag` was resolved by factoring the parse into a helper (`_try_parse_semver`) called from a generator expression — no `noqa` needed.
+- **Newer Click (>=8.2) removed `CliRunner(mix_stderr=False)`.** Story sketch (Dev Notes §Critical architectural constraints #7) prescribed `mix_stderr=False` but installed Click splits stdout/stderr by default. Fixture uses no-arg `CliRunner()`.
+- **`_pick_latest_semver_tag` returns highest-by-semver, not first-in-API-order** — verified by `test_picks_highest_semver_tag_not_first_in_list_when_computing_bump`. FR8 satisfied.
+- **`pyproject.toml [project.scripts] semvertag = "semvertag.__main__:main"`** points at the `main()` wrapper function (not the Typer callback) — `main()` calls `MAIN_APP()` which invokes the Click runner. Resolves Story 1.1 deferred-work line 7.
+- **`importlib.metadata.version("semvertag")` reads installed-package dist-info.** Current version string returns `"0"` (pyproject.toml:18); Story 4.2 will wire real release versions.
+
 ### Completion Notes List
+
+- All 13 ACs (AC1–AC11 + AC6.5 + AC6.6) verified by 16 new integration tests + 11 new use case unit tests + 9 settings/provenance unit-test additions. Full suite: **243 tests passed**, 0 regressions in Stories 1.1–1.6.
+- Coverage: `_use_case.py` **97%**, `ioc.py` **98%**, `__main__.py` **72%** (uncovered lines are inside `except` handlers — exercised by AC9 exit-code-3/4 integration tests but `pytest --cov` reports them as miss because the `raise typer.Exit(...)` lines unwind via SystemExit). Global coverage **93%** — above the implicit ≥85% NFR22 gate. Story 1.6's 100% branch gate on `strategies/branch_prefix.py` remains green.
+- `just lint-ci` and `uv run ty check` clean. `uv build` produces both wheel and sdist.
+- `uv run semvertag --help`, `uv run python -m semvertag --help`, and `uv run semvertag --version` all return exit 0.
+- `pyproject.toml` not edited — `[project.scripts]` was correct from Story 1.1; this story added the missing `main` function. `Justfile` not edited — existing `test` recipe exercises the new integration tests.
+- Lazy-import discipline preserved: `ioc.py` imports `semvertag.providers.gitlab`, `semvertag.strategies.branch_prefix`, `semvertag._output`, `semvertag._transport`, and `semvertag._errors` only inside Factory creator bodies. Non-active provider files remain absent and the package still imports cleanly.
+- Output dispatch (rich vs json) handled at two layers: DI container override + entrypoint-local `output` instance for `except`-clause error routing. Second layer documented in deferred-work as v1.x refactor candidate.
+- Story 1.1 deferred-work entry "semvertag console script references missing `semvertag.__main__:main`" is resolved.
+- Story 1.3 deferred-work entry "BrokenPipeError / OSError on `sys.stdout.write`" is resolved by the AC7 entrypoint try-chain.
+- Story-1.7-specific deferrals (6 items) appended to `_bmad/deferred-work.md`.
 
 ### File List
 
+- **New:** `semvertag/_use_case.py` (74 stmts — orchestration; `SemvertagUseCase` frozen dataclass + 5 helpers)
+- **New:** `semvertag/ioc.py` (50 stmts — 5 modern_di Groups + `ALL_GROUPS` + `build_container`)
+- **New:** `semvertag/__main__.py` (85 stmts — Typer app + callback + exit-code mapping + `main()` console-script entry)
+- **New:** `tests/unit/test_use_case.py` (11 unit tests covering AC2–AC5)
+- **New:** `tests/integration/conftest.py` (shared CLI fixtures)
+- **New:** `tests/integration/test_cli_main_verb.py` (5 integration tests covering AC8)
+- **New:** `tests/integration/test_cli_quiet_json_matrix.py` (10 integration tests covering AC9)
+- **Modified:** `semvertag/_settings.py` (added `project_id: int | None`, `quiet: bool`, `_PROJECT_ID_ALIASES`, `_TOP_LEVEL_FIELD_ALIASES`, `_inject_top_level_aliases` validator; extended `_candidate_env_names`. Story 1.2 regression canary preserved.)
+- **Modified:** `tests/unit/conftest.py` (added `SEMVERTAG_PROJECT_ID` and `CI_PROJECT_ID` to `_EXPLICIT_ENV_VARS`)
+- **Modified:** `tests/unit/test_settings.py` (added 4 tests for project_id resolution + 1 for SEMVERTAG_QUIET env)
+- **Modified:** `tests/unit/test_provenance.py` (added 6 provenance tests; expanded `_EXPECTED_KEYS`)
+- **Modified:** `_bmad/deferred-work.md` (appended Story 1.7 section with 6 deferred items)
+- **Modified:** `_bmad/sprint-status.yaml` (`1-7-…: ready-for-dev` → `in-progress` → `review`)
+- **Modified:** `_bmad/1-7-wire-di-groups-and-typer-entrypoint.md` (Status, all 62 task/subtask checkboxes, Dev Agent Record)
+- **No-change confirmed:** `pyproject.toml`, `Justfile`, `_transport.py`, `_errors.py`, `_redact.py`, `_output.py`, `_types.py`, `strategies/_base.py`, `strategies/branch_prefix.py`, `strategies/conventional_commits.py`, `providers/_base.py`, `providers/gitlab.py`, `tests/conftest.py`, `tests/unit/test_branch_prefix_strategy.py`, `tests/integration/test_gitlab_provider.py`, `tests/test_smoke.py`.
+
 ### Change Log
+
+- 2026-05-28 — Added `semvertag/_settings.py::Settings.project_id` and `Settings.quiet` top-level fields; added `_PROJECT_ID_ALIASES`, `_TOP_LEVEL_FIELD_ALIASES`, `_inject_top_level_aliases` validator; extended `_candidate_env_names` to surface `CI_PROJECT_ID` in `_provenance` per Task 1.
+- 2026-05-28 — Added `semvertag/_use_case.py::SemvertagUseCase` frozen dataclass + 5 helpers implementing AC2–AC5 orchestration. Per-strategy no-bump status mapping ready for Story 2.1.
+- 2026-05-28 — Added `semvertag/ioc.py` with five `modern_di.Group` subclasses, `ALL_GROUPS` export, and `build_container(settings, *, json=False, inner_transport=None)` helper using `container.override(...)` for both JSON output swap and test transport seam. All Factories use `skip_creator_parsing=True` + explicit `kwargs={...}`.
+- 2026-05-28 — Added `semvertag/__main__.py` with `MAIN_APP` Typer app (`invoke_without_command=True, no_args_is_help=False`), `_main_callback` carrying all AC6 flags, helper functions, and `main()` console-script entry. Implements AC7 try-chain: `ValidationError` → `ConfigError` (exit 2) → `SemvertagError` (variable exit) → `BrokenPipeError`/`OSError(EPIPE)` (exit 0).
+- 2026-05-28 — Added 11 unit tests in `tests/unit/test_use_case.py` exercising every AC2–AC5 branch.
+- 2026-05-28 — Added `tests/integration/conftest.py` with shared CLI fixtures.
+- 2026-05-28 — Added 5 integration tests in `tests/integration/test_cli_main_verb.py` covering AC8.
+- 2026-05-28 — Added 10 integration tests in `tests/integration/test_cli_quiet_json_matrix.py` covering AC9.
+- 2026-05-28 — Added 9 settings/provenance unit tests across `test_settings.py` and `test_provenance.py`.
+- 2026-05-28 — Updated `tests/unit/conftest.py::_EXPLICIT_ENV_VARS` for the new env vars.
+- 2026-05-28 — Appended Story 1.7 section to `_bmad/deferred-work.md` (6 v1.x deferrals).
+- 2026-05-28 — Bumped sprint-status to `review` for `1-7-wire-di-groups-and-typer-entrypoint`.

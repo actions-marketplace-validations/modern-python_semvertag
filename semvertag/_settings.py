@@ -23,9 +23,16 @@ _GITHUB_TOKEN_ALIASES: typing.Final[tuple[str, ...]] = (
     "SEMVERTAG_TOKEN",
     "GITHUB_TOKEN",
 )
+_PROJECT_ID_ALIASES: typing.Final[tuple[str, ...]] = (
+    "SEMVERTAG_PROJECT_ID",
+    "CI_PROJECT_ID",
+)
 _TOKEN_ALIASES_BY_PATH: typing.Final[dict[str, tuple[str, ...]]] = {
     "gitlab.token": _GITLAB_TOKEN_ALIASES,
     "github.token": _GITHUB_TOKEN_ALIASES,
+}
+_TOP_LEVEL_FIELD_ALIASES: typing.Final[dict[str, tuple[str, ...]]] = {
+    "project_id": _PROJECT_ID_ALIASES,
 }
 _PROVIDER_TO_NESTED_KEY: typing.Final[dict[str, str]] = {
     "gitlab": "gitlab",
@@ -58,6 +65,8 @@ class Settings(pydantic_settings.BaseSettings):
     provider: typing.Literal["gitlab", "github", "bitbucket"] = "gitlab"
     default_branch: str | None = None
     request_timeout: float = pydantic.Field(default=8.0, gt=0)
+    project_id: int | None = pydantic.Field(default=None)
+    quiet: bool = pydantic.Field(default=False)
     gitlab: GitLabConfig = pydantic.Field(default_factory=GitLabConfig)
     github: GitHubConfig = pydantic.Field(default_factory=GitHubConfig)
     branch_prefix: BranchPrefixConfig = pydantic.Field(default_factory=BranchPrefixConfig)
@@ -78,6 +87,21 @@ class Settings(pydantic_settings.BaseSettings):
         if aliases is None:
             return data
         _inject_token(data, nested_key, aliases)
+        return data
+
+    @pydantic.model_validator(mode="before")
+    @classmethod
+    def _inject_top_level_aliases(cls, data: typing.Any) -> typing.Any:  # noqa: ANN401
+        if not isinstance(data, dict):
+            return data
+        for field_name, aliases in _TOP_LEVEL_FIELD_ALIASES.items():
+            if field_name in data and data[field_name] is not None:
+                continue
+            found = _find_aliased_env(aliases)
+            if found is None:
+                continue
+            _matched_alias, value = found
+            data[field_name] = value
         return data
 
     @pydantic.field_validator("request_timeout")
@@ -141,6 +165,8 @@ def _resolve_source(full_key: str) -> ConfigSource:
 def _candidate_env_names(full_key: str) -> tuple[str, ...]:
     if full_key in _TOKEN_ALIASES_BY_PATH:
         return _TOKEN_ALIASES_BY_PATH[full_key]
+    if full_key in _TOP_LEVEL_FIELD_ALIASES:
+        return _TOP_LEVEL_FIELD_ALIASES[full_key]
     default_env_name: typing.Final = _ENV_PREFIX + full_key.upper().replace(".", _ENV_NESTED_DELIMITER)
     return (default_env_name,)
 
