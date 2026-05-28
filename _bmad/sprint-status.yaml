@@ -1,5 +1,5 @@
 # generated: 2026-05-26
-# last_updated: 2026-05-28 (Story 1.7 reviewed and landed — done)
+# last_updated: 2026-05-28 (Story 1.7 reviewed and landed; Epic 1 retro completed)
 # project: semvertag
 # project_key: NOKEY
 # tracking_system: file-system
@@ -37,14 +37,14 @@
 generated: 2026-05-26
 last_updated: 2026-05-28
 project: semvertag
-last_updated_note: Story 1.7 reviewed (bmad-code-review) and 9 patches applied (3 decisions resolved + 6 patches + 9 deferred); 243 tests pass, 93% line coverage, branch-strategies gate at 100%.
+last_updated_note: "Story 1.7 reviewed and landed; Epic 1 complete (7/7 stories done). Epic 1 retro saved to _bmad/epic-1-retro-2026-05-28.md; 6 action items queued for Epic 2 prep (A1-A6). Next: Epic 2 — Conventional Commits Strategy & Per-Repo Switching."
 project_key: NOKEY
 tracking_system: file-system
 story_location: /Users/kevinsmith/src/pypi/autosemver/_bmad
 
 development_status:
   # Epic 1: Foundation & First Auto-Tag (GitLab + branch-prefix)
-  epic-1: in-progress
+  epic-1: done
   1-1-bootstrap-public-scaffolding-from-modern-di: done
   1-2-settings-layer-with-aliaschoices-and-provenance: done
   1-3-errors-runresult-output-redaction: done
@@ -52,7 +52,7 @@ development_status:
   1-5-gitlabprovider-four-endpoints-via-httpx2: done
   1-6-branchprefixstrategy-100-branch-coverage: done
   1-7-wire-di-groups-and-typer-entrypoint: done
-  epic-1-retrospective: optional
+  epic-1-retrospective: done
 
   # Epic 2: Conventional Commits Strategy & Per-Repo Switching
   epic-2: backlog
