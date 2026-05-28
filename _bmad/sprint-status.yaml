@@ -1,5 +1,5 @@
 # generated: 2026-05-26
-# last_updated: 2026-05-28 (Story 1.7 reviewed and landed; Epic 1 retro completed)
+# last_updated: 2026-05-28 (Epic 1 closed; Story 2.1 contextualised — ready-for-dev)
 # project: semvertag
 # project_key: NOKEY
 # tracking_system: file-system
@@ -37,7 +37,7 @@
 generated: 2026-05-26
 last_updated: 2026-05-28
 project: semvertag
-last_updated_note: "Story 1.7 reviewed and landed; Epic 1 complete (7/7 stories done). Epic 1 retro saved to _bmad/epic-1-retro-2026-05-28.md; 6 action items queued for Epic 2 prep (A1-A6). Next: Epic 2 — Conventional Commits Strategy & Per-Repo Switching."
+last_updated_note: "Story 2.1 contextualised (ready-for-dev) — Epic 2 opened. Story bakes in 4 of 6 Epic-1-retro action items (A2/A3/A4/A5); A1 reassessed as not-needed; A6 discharged. Epic 1 status: done (retro at _bmad/epic-1-retro-2026-05-28.md). Next: dev-story 2.1."
 project_key: NOKEY
 tracking_system: file-system
 story_location: /Users/kevinsmith/src/pypi/autosemver/_bmad
@@ -55,8 +55,8 @@ development_status:
   epic-1-retrospective: done
 
   # Epic 2: Conventional Commits Strategy & Per-Repo Switching
-  epic-2: backlog
-  2-1-conventional-commits-strategy-and-per-repo-switching: backlog
+  epic-2: in-progress
+  2-1-conventional-commits-strategy-and-per-repo-switching: ready-for-dev
   epic-2-retrospective: optional
 
   # Epic 3: Pre-flight Diagnostics (semvertag doctor)
