@@ -1,5 +1,13 @@
 import dataclasses
+import enum
 import typing
+
+
+class Bump(enum.Enum):
+    NONE = "none"
+    PATCH = "patch"
+    MINOR = "minor"
+    MAJOR = "major"
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)

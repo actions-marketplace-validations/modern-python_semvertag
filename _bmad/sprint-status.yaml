@@ -1,5 +1,5 @@
 # generated: 2026-05-26
-# last_updated: 2026-05-28 (Story 1.5 code review complete — done)
+# last_updated: 2026-05-28 (Story 1.7 created — ready-for-dev; Story 1.6 still in review)
 # project: semvertag
 # project_key: NOKEY
 # tracking_system: file-system
@@ -37,7 +37,7 @@
 generated: 2026-05-26
 last_updated: 2026-05-28
 project: semvertag
-last_updated_note: Story 1.5 code review complete - done
+last_updated_note: Story 1.6 done (second review pass clean — 9 new defer items, 0 patches); Story 1.7 ready-for-dev (final Epic 1 wiring story)
 project_key: NOKEY
 tracking_system: file-system
 story_location: /Users/kevinsmith/src/pypi/autosemver/_bmad
@@ -50,8 +50,8 @@ development_status:
   1-3-errors-runresult-output-redaction: done
   1-4-retryingtransport-with-retry-policy: done
   1-5-gitlabprovider-four-endpoints-via-httpx2: done
-  1-6-branchprefixstrategy-100-branch-coverage: backlog
-  1-7-wire-di-groups-and-typer-entrypoint: backlog
+  1-6-branchprefixstrategy-100-branch-coverage: done
+  1-7-wire-di-groups-and-typer-entrypoint: ready-for-dev
   epic-1-retrospective: optional
 
   # Epic 2: Conventional Commits Strategy & Per-Repo Switching
