@@ -1,6 +1,6 @@
 # Story 2.1: Add ConventionalCommitsStrategy with `!` / `BREAKING CHANGE:` major detection and wire `SEMVERTAG_STRATEGY` switching end-to-end
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -275,82 +275,123 @@ def footers(message: str) -> list[str]:
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Author `semvertag/_commit_parse.py` shared helper (AC9)** — retro action A3.
-  - [ ] 1.1 Create the module with global imports per CLAUDE.md (`import typing`).
-  - [ ] 1.2 Implement `subject_line(message: str) -> str` using `message.splitlines()`, skipping leading blank lines, returning first non-blank with trailing whitespace already stripped by `splitlines()` (CRLF safe).
-  - [ ] 1.3 Implement `footers(message: str) -> list[str]` — finds the first blank-line separator after the subject; returns subsequent non-blank lines `.rstrip()`-ed. Returns empty list if no separator found.
-  - [ ] 1.4 Add `__all__: typing.Final = ("subject_line", "footers")`.
-  - [ ] 1.5 Author `tests/unit/test_commit_parse.py` with ≥9 cases per AC9: empty string, single-line no-`\n`, CRLF, mixed LF/CRLF, leading blank lines, U+2028/U+2029, subject-only (no footers), footers with extra blank lines, all-blank body.
-  - [ ] 1.6 Refactor `semvertag/strategies/branch_prefix.py:26` to call `_commit_parse.subject_line(commit.message)` in place of `commit.message.split("\n", 1)[0]`. Confirm `just test-branch-strategies` reports 100% branch coverage unchanged.
+- [x] **Task 1: Author `semvertag/_commit_parse.py` shared helper (AC9)** — retro action A3.
+  - [x] 1.1 Create the module with global imports per CLAUDE.md (`import typing`).
+  - [x] 1.2 Implement `subject_line(message: str) -> str` using `message.splitlines()`, skipping leading blank lines, returning first non-blank with trailing whitespace already stripped by `splitlines()` (CRLF safe).
+  - [x] 1.3 Implement `footers(message: str) -> list[str]` — finds the first blank-line separator after the subject; returns subsequent non-blank lines `.rstrip()`-ed. Returns empty list if no separator found.
+  - [x] 1.4 Add `__all__: typing.Final = ("subject_line", "footers")`.
+  - [x] 1.5 Author `tests/unit/test_commit_parse.py` with ≥9 cases per AC9: empty string, single-line no-`\n`, CRLF, mixed LF/CRLF, leading blank lines, U+2028/U+2029, subject-only (no footers), footers with extra blank lines, all-blank body.
+  - [x] 1.6 Refactor `semvertag/strategies/branch_prefix.py:26` to call `_commit_parse.subject_line(commit.message)` in place of `commit.message.split("\n", 1)[0]`. Confirm `just test-branch-strategies` reports 100% branch coverage unchanged.
 
-- [ ] **Task 2: Author `semvertag/strategies/conventional_commits.py:ConventionalCommitsStrategy` (AC1–AC5)**.
-  - [ ] 2.1 Keep the existing `ConventionalCommitsConfig` class **unchanged** (Story 1.2 stability stance; `_settings.py:73` consumer).
-  - [ ] 2.2 Add module imports: `import dataclasses; import re; import typing; from semvertag._commit_parse import footers, subject_line; from semvertag._types import Bump, Commit`. NO `from __future__ import annotations` (CLAUDE.md + architecture line 525).
-  - [ ] 2.3 Declare `ConventionalCommitsStrategy` per AC1: frozen, slots, kw_only; `name: typing.ClassVar[str] = "conventional-commits"`; one `config: ConventionalCommitsConfig` field.
-  - [ ] 2.4 Define module-level regex `_TYPE_PATTERN: typing.Final = re.compile(r"^(?P<type>[a-z]+)(?:\((?P<scope>[^)]+)\))?(?P<bang>!?):")` — anchored at start, captures the type, optional scope, and optional `!` BEFORE the `:`. Case-sensitive per CC v1.0.0.
-  - [ ] 2.5 Define module-level constants `_BREAKING_CHANGE_TOKEN: typing.Final = "BREAKING CHANGE:"` and `_BREAKING_CHANGE_HYPHEN: typing.Final = "BREAKING-CHANGE:"`. Footer detection scans `footers(message)` for any line that `startswith` either token (case-sensitive, per CC v1.0.0 spec).
-  - [ ] 2.6 Implement `decide(self, commit: Commit) -> Bump`:
+- [x] **Task 2: Author `semvertag/strategies/conventional_commits.py:ConventionalCommitsStrategy` (AC1–AC5)**.
+  - [x] 2.1 Keep the existing `ConventionalCommitsConfig` class **unchanged** (Story 1.2 stability stance; `_settings.py:73` consumer).
+  - [x] 2.2 Add module imports: `import dataclasses; import re; import typing; from semvertag._commit_parse import footers, subject_line; from semvertag._types import Bump, Commit`. NO `from __future__ import annotations` (CLAUDE.md + architecture line 525).
+  - [x] 2.3 Declare `ConventionalCommitsStrategy` per AC1: frozen, slots, kw_only; `name: typing.ClassVar[str] = "conventional-commits"`; one `config: ConventionalCommitsConfig` field.
+  - [x] 2.4 Define module-level regex `_TYPE_PATTERN: typing.Final = re.compile(r"^(?P<type>[a-z]+)(?:\((?P<scope>[^)]+)\))?(?P<bang>!?):")` — anchored at start, captures the type, optional scope, and optional `!` BEFORE the `:`. Case-sensitive per CC v1.0.0.
+  - [x] 2.5 Define module-level constants `_BREAKING_CHANGE_TOKEN: typing.Final = "BREAKING CHANGE:"` and `_BREAKING_CHANGE_HYPHEN: typing.Final = "BREAKING-CHANGE:"`. Footer detection scans `footers(message)` for any line that `startswith` either token (case-sensitive, per CC v1.0.0 spec).
+  - [x] 2.6 Implement `decide(self, commit: Commit) -> Bump`:
     1. `subject: typing.Final = subject_line(commit.message)`
     2. If empty → `Bump.NONE` (covers empty / all-blank messages).
     3. `match: typing.Final = _TYPE_PATTERN.match(subject)` — if no match → `Bump.NONE`.
     4. Scan `footers(commit.message)` for a line starting with either breaking-change token → if found, return `Bump.MAJOR` (footer alone is sufficient even with unrecognized type — AC5).
     5. If `match["bang"] == "!"` → `Bump.MAJOR`.
     6. `commit_type: typing.Final = match["type"]`. If `commit_type in self.config.minor_types` → `Bump.MINOR`. If in `self.config.patch_types` → `Bump.PATCH`. Else → `Bump.NONE`.
-  - [ ] 2.7 Add `__all__: typing.Final = ("ConventionalCommitsConfig", "ConventionalCommitsStrategy")`.
+  - [x] 2.7 Add `__all__: typing.Final = ("ConventionalCommitsConfig", "ConventionalCommitsStrategy")`.
 
-- [ ] **Task 3: Author unit tests `tests/unit/test_conventional_commits_strategy.py` (AC10)** — 100% line + 100% branch.
-  - [ ] 3.1 Module preamble: `import pytest; from semvertag._types import Bump, Commit; from semvertag.strategies.conventional_commits import ConventionalCommitsConfig, ConventionalCommitsStrategy`. Pre-annotate `typing.Final` on every module-level constant (Story 1.2 conftest precedent / auto-typing-final).
-  - [ ] 3.2 `@pytest.fixture` for `default_strategy` returning `ConventionalCommitsStrategy(config=ConventionalCommitsConfig())`.
-  - [ ] 3.3 Implement the 21 cases from AC10. Use `@pytest.mark.parametrize` aggressively (Story 1.6 §Testing standards). Each `Commit` fixture uses `sha="abc1234"` constant; only `message` varies per case.
-  - [ ] 3.4 Verify naming follows `test_<verb>_<outcome>_when_<condition>` (architecture line 911 / Story 1.6).
+- [x] **Task 3: Author unit tests `tests/unit/test_conventional_commits_strategy.py` (AC10)** — 100% line + 100% branch.
+  - [x] 3.1 Module preamble: `import pytest; from semvertag._types import Bump, Commit; from semvertag.strategies.conventional_commits import ConventionalCommitsConfig, ConventionalCommitsStrategy`. Pre-annotate `typing.Final` on every module-level constant (Story 1.2 conftest precedent / auto-typing-final).
+  - [x] 3.2 `@pytest.fixture` for `default_strategy` returning `ConventionalCommitsStrategy(config=ConventionalCommitsConfig())`.
+  - [x] 3.3 Implement the 21 cases from AC10. Use `@pytest.mark.parametrize` aggressively (Story 1.6 §Testing standards). Each `Commit` fixture uses `sha="abc1234"` constant; only `message` varies per case.
+  - [x] 3.4 Verify naming follows `test_<verb>_<outcome>_when_<condition>` (architecture line 911 / Story 1.6).
 
-- [ ] **Task 4: Wire `ConventionalCommitsStrategy` in `ioc.py` (AC6, AC7)**.
-  - [ ] 4.1 Add `_build_conventional_commits_strategy(settings: Settings) -> "ConventionalCommitsStrategy"` mirror to `_build_branch_prefix_strategy` at `semvertag/ioc.py:51-54`. Lazy import inside: `from semvertag.strategies.conventional_commits import ConventionalCommitsStrategy  # noqa: PLC0415`. Return `ConventionalCommitsStrategy(config=settings.conventional_commits)`.
-  - [ ] 4.2 Add `conventional_commits_strategy` Factory to `StrategiesGroup` mirroring `branch_prefix_strategy` shape (`ioc.py:99-106`).
-  - [ ] 4.3 In `build_container(settings, *, json=False, inner_transport=None)`:
+- [x] **Task 4: Wire `ConventionalCommitsStrategy` in `ioc.py` (AC6, AC7)**.
+  - [x] 4.1 Add `_build_conventional_commits_strategy(settings: Settings) -> "ConventionalCommitsStrategy"` mirror to `_build_branch_prefix_strategy` at `semvertag/ioc.py:51-54`. Lazy import inside: `from semvertag.strategies.conventional_commits import ConventionalCommitsStrategy  # noqa: PLC0415`. Return `ConventionalCommitsStrategy(config=settings.conventional_commits)`.
+  - [x] 4.2 Add `conventional_commits_strategy` Factory to `StrategiesGroup` mirroring `branch_prefix_strategy` shape (`ioc.py:99-106`).
+  - [x] 4.3 In `build_container(settings, *, json=False, inner_transport=None)`:
     - **Remove** the strategy fail-fast gate at `ioc.py:141-143` (the gate added in Story 1.7 post-review).
     - **Keep** the provider fail-fast gate at `ioc.py:138-140`.
     - **Add** a strategy dispatch: after constructing `container`, if `settings.strategy == "conventional-commits"`, call `container.override(StrategiesGroup.branch_prefix_strategy, <conventional_commits instance>)` (or use `overrides_registry` if a per-kwarg API is available — see Dev Notes §Strategy dispatch for the chosen mechanism).
-  - [ ] 4.4 Add a unit-or-light-integration test in `tests/unit/test_ioc.py` (NEW file) that constructs `build_container(settings_with_strategy="conventional-commits")` and asserts the resolved `UseCasesGroup.semvertag_use_case`'s `.strategy.name == "conventional-commits"`. (Avoid network — no `inner_transport` needed; test asserts on the resolved DI graph only.)
-  - [ ] 4.5 Confirm `__main__.py` requires NO edits (AC7) — `_collect_overrides` already routes `strategy` into the overlay; `build_container(settings, json=json_flag)` already dispatches per AC6.
+  - [x] 4.4 Add a unit-or-light-integration test in `tests/unit/test_ioc.py` (NEW file) that constructs `build_container(settings_with_strategy="conventional-commits")` and asserts the resolved `UseCasesGroup.semvertag_use_case`'s `.strategy.name == "conventional-commits"`. (Avoid network — no `inner_transport` needed; test asserts on the resolved DI graph only.)
+  - [x] 4.5 Confirm `__main__.py` requires NO edits (AC7) — `_collect_overrides` already routes `strategy` into the overlay; `build_container(settings, json=json_flag)` already dispatches per AC6.
 
-- [ ] **Task 5: Integration tests `tests/integration/test_strategy_switching.py` (AC11)**.
-  - [ ] 5.1 Create the file with module preamble: `import collections.abc; import json as json_module; import typing; from typer.testing import CliRunner; from semvertag.__main__ import MAIN_APP; from tests.conftest import HandlerCallable; from tests.integration.conftest import (DEFAULT_COMMIT_SHA, DEFAULT_TAG_NAME, GITLAB_PROJECT_ID)`.
-  - [ ] 5.2 Add a local helper `_handler_with_message(message: str) -> HandlerCallable` that wraps `merge_commit_handler(commit_message=message)` if the existing helper supports the kwarg — if not, build the handler inline (same shape as `tests/integration/conftest.py:55-78`).
-  - [ ] 5.3 Implement the 6 tests from AC11.
-  - [ ] 5.4 For test 5 (Marina's journey), use `monkeypatch.setenv("SEMVERTAG_STRATEGY", "conventional-commits")` for the second invocation; reuse the same `install_mock_transport` fixture across both invocations.
-  - [ ] 5.5 Each test asserts `result.exit_code`, `result.stdout`, and (where applicable) `result.stderr` separately.
+- [x] **Task 5: Integration tests `tests/integration/test_strategy_switching.py` (AC11)**.
+  - [x] 5.1 Create the file with module preamble: `import collections.abc; import json as json_module; import typing; from typer.testing import CliRunner; from semvertag.__main__ import MAIN_APP; from tests.conftest import HandlerCallable; from tests.integration.conftest import (DEFAULT_COMMIT_SHA, DEFAULT_TAG_NAME, GITLAB_PROJECT_ID)`.
+  - [x] 5.2 Add a local helper `_handler_with_message(message: str) -> HandlerCallable` that wraps `merge_commit_handler(commit_message=message)` if the existing helper supports the kwarg — if not, build the handler inline (same shape as `tests/integration/conftest.py:55-78`).
+  - [x] 5.3 Implement the 6 tests from AC11.
+  - [x] 5.4 For test 5 (Marina's journey), use `monkeypatch.setenv("SEMVERTAG_STRATEGY", "conventional-commits")` for the second invocation; reuse the same `install_mock_transport` fixture across both invocations.
+  - [x] 5.5 Each test asserts `result.exit_code`, `result.stdout`, and (where applicable) `result.stderr` separately.
 
-- [ ] **Task 6: Settings provenance regression test (AC12)** — retro action A2.
-  - [ ] 6.1 Add `test_cli_overlay_strategy_wins_over_conflicting_env` to `tests/unit/test_provenance.py` (closer fit than `test_settings.py`).
-  - [ ] 6.2 Add `test_cli_overlay_provider_wins_over_conflicting_env` — same pattern with `--provider github` over `SEMVERTAG_PROVIDER=gitlab`.
-  - [ ] 6.3 Add `test_env_quiet_survives_when_cli_flag_absent` — `SEMVERTAG_QUIET=true` + empty CLI overlay → `settings.quiet == True`, provenance layer `"env"`, detail `"SEMVERTAG_QUIET"`.
+- [x] **Task 6: Settings provenance regression test (AC12)** — retro action A2.
+  - [x] 6.1 Add `test_cli_overlay_strategy_wins_over_conflicting_env` to `tests/unit/test_provenance.py` (closer fit than `test_settings.py`).
+  - [x] 6.2 Add `test_cli_overlay_provider_wins_over_conflicting_env` — same pattern with `--provider github` over `SEMVERTAG_PROVIDER=gitlab`.
+  - [x] 6.3 Add `test_env_quiet_survives_when_cli_flag_absent` — `SEMVERTAG_QUIET=true` + empty CLI overlay → `settings.quiet == True`, provenance layer `"env"`, detail `"SEMVERTAG_QUIET"`.
 
-- [ ] **Task 7: `_redact.py` GitHub token-family extension (AC13)** — retro action A4.
-  - [ ] 7.1 Extend `_TOKEN_PATTERN` regex in `semvertag/_redact.py:6-11` with the 5 GitHub alternations from AC13. Keep alternation ordering: longer/more-specific prefixes first (`github_pat_` before `ghp_`).
-  - [ ] 7.2 Add parametrized assertions in `tests/unit/test_redact.py` covering each new prefix: min-length (20-char body), above-min sample, mid-string, word-boundary.
-  - [ ] 7.3 Confirm existing `_redact.py` 100% line coverage still holds.
+- [x] **Task 7: `_redact.py` GitHub token-family extension (AC13)** — retro action A4.
+  - [x] 7.1 Extend `_TOKEN_PATTERN` regex in `semvertag/_redact.py:6-11` with the 5 GitHub alternations from AC13. Keep alternation ordering: longer/more-specific prefixes first (`github_pat_` before `ghp_`).
+  - [x] 7.2 Add parametrized assertions in `tests/unit/test_redact.py` covering each new prefix: min-length (20-char body), above-min sample, mid-string, word-boundary.
+  - [x] 7.3 Confirm existing `_redact.py` 100% line coverage still holds.
 
-- [ ] **Task 8: Integration-test coupling documentation (AC14)** — retro action A5.
-  - [ ] 8.1 Create `tests/integration/README.md` with the explainer per AC14.
-  - [ ] 8.2 Keep it short — under 30 lines. Title, one-paragraph context, three bullet warnings, no code blocks needed.
+- [x] **Task 8: Integration-test coupling documentation (AC14)** — retro action A5.
+  - [x] 8.1 Create `tests/integration/README.md` with the explainer per AC14.
+  - [x] 8.2 Keep it short — under 30 lines. Title, one-paragraph context, three bullet warnings, no code blocks needed.
 
-- [ ] **Task 9: `Justfile` and coverage gate update (AC15)**.
-  - [ ] 9.1 Add a new recipe `test-cc-strategies` in `Justfile` (or rename `test-branch-strategies` → `test-strategies` and have it scope to both `branch_prefix.py` AND `conventional_commits.py` with separate `--cov` invocations — pick the cleaner option).
-  - [ ] 9.2 If extending `lint-ci` / `test` gates, **do not** add `conventional_commits.py` branch gate to the global `pytest --cov` invocation — keep it isolated like `test-branch-strategies` (Story 1.6 precedent: the strict gate is its own recipe so the global suite remains line-only).
-  - [ ] 9.3 Document the recipe in `Dev Notes §Coverage interaction`.
+- [x] **Task 9: `Justfile` and coverage gate update (AC15)**.
+  - [x] 9.1 Add a new recipe `test-cc-strategies` in `Justfile` (or rename `test-branch-strategies` → `test-strategies` and have it scope to both `branch_prefix.py` AND `conventional_commits.py` with separate `--cov` invocations — pick the cleaner option).
+  - [x] 9.2 If extending `lint-ci` / `test` gates, **do not** add `conventional_commits.py` branch gate to the global `pytest --cov` invocation — keep it isolated like `test-branch-strategies` (Story 1.6 precedent: the strict gate is its own recipe so the global suite remains line-only).
+  - [x] 9.3 Document the recipe in `Dev Notes §Coverage interaction`.
 
-- [ ] **Task 10: Run the full local validation gate (AC15)**.
-  - [ ] 10.1 `just install` (fresh sync).
-  - [ ] 10.2 `just lint-ci` — must be clean.
-  - [ ] 10.3 `just test` — full suite passes; coverage ≥85%.
-  - [ ] 10.4 `just test-branch-strategies` — Story 1.6 gate stays 100% branch on `branch_prefix.py`.
-  - [ ] 10.5 `just test-cc-strategies` (or equivalent) — new 100% branch gate on `conventional_commits.py`.
-  - [ ] 10.6 `uv run ty check` — clean.
-  - [ ] 10.7 `uv build` — clean.
-  - [ ] 10.8 Smoke: `SEMVERTAG_STRATEGY=conventional-commits uv run semvertag --help` should succeed (the help text is unchanged, but the strategy validation should NOT reject the env value — confirms the fail-fast gate is gone).
-  - [ ] 10.9 Update `_bmad/sprint-status.yaml`: `2-1-conventional-commits-strategy-and-per-repo-switching: ready-for-dev → in-progress → review` (code-review step bumps to `done`).
-  - [ ] 10.10 Update this story file: tick all task/subtask checkboxes; fill in Dev Agent Record sections; bump Status to `review`.
+- [x] **Task 10: Run the full local validation gate (AC15)**.
+  - [x] 10.1 `just install` (fresh sync).
+  - [x] 10.2 `just lint-ci` — must be clean.
+  - [x] 10.3 `just test` — full suite passes; coverage ≥85%.
+  - [x] 10.4 `just test-branch-strategies` — Story 1.6 gate stays 100% branch on `branch_prefix.py`.
+  - [x] 10.5 `just test-cc-strategies` (or equivalent) — new 100% branch gate on `conventional_commits.py`.
+  - [x] 10.6 `uv run ty check` — clean.
+  - [x] 10.7 `uv build` — clean.
+  - [x] 10.8 Smoke: `SEMVERTAG_STRATEGY=conventional-commits uv run semvertag --help` should succeed (the help text is unchanged, but the strategy validation should NOT reject the env value — confirms the fail-fast gate is gone).
+  - [x] 10.9 Update `_bmad/sprint-status.yaml`: `2-1-conventional-commits-strategy-and-per-repo-switching: ready-for-dev → in-progress → review` (code-review step bumps to `done`).
+  - [x] 10.10 Update this story file: tick all task/subtask checkboxes; fill in Dev Agent Record sections; bump Status to `review`.
+
+### Review Findings
+
+_From `bmad-code-review` 2026-05-29 — Blind Hunter + Edge Case Hunter + Acceptance Auditor (full review mode)._
+
+**Decision-needed** — resolved 2026-05-29, each became a patch (applied below):
+
+- [x] [Review][Decision] DI dispatch: dead `conventional_commits_strategy` Factory + misnamed override → **(c) Introduce `current_strategy` Factory + bind use case to it; delete the override.**
+- [x] [Review][Decision] Indented footer `BREAKING CHANGE:` not detected → **(b) Lenient — `lstrip()` footer line before `startswith`.**
+- [x] [Review][Decision] Footer-without-blank-line returns NONE → **(b) Lenient — collect post-subject lines even without a blank-line separator.**
+- [x] [Review][Decision] CC type regex `^[a-z]+` silently rejects user-configured non-`[a-z]+` types → **(a) Strict regex + pydantic `field_validator` on `ConventionalCommitsConfig` rejecting unreachable spellings at config-load.**
+- [x] [Review][Decision] `_commit_parse.footers()` over-collects body prose → **(a) Rename to `body_lines()` to reflect the actual semantics.**
+
+**Patch** — applied 2026-05-29:
+
+- [x] [Review][Patch] D1 applied: `ioc.py` introduces `_build_current_strategy` + `current_strategy` Factory; `UseCasesGroup.semvertag_use_case` binds to `current_strategy`; `build_container` no longer overrides `branch_prefix_strategy`. `test_ioc.py` updated to resolve via `current_strategy` and adds a regression asserting named factories still resolve to their concrete types regardless of `settings.strategy`. [`semvertag/ioc.py`, `tests/unit/test_ioc.py`]
+- [x] [Review][Patch] D2 applied: `decide()` now `lstrip()`s each `body_lines()` entry before the `startswith` check; new parametrized test row covers tab- and space-indented `BREAKING CHANGE:` / `BREAKING-CHANGE:` footers → `MAJOR`. [`semvertag/strategies/conventional_commits.py:43-46`, `tests/unit/test_conventional_commits_strategy.py`]
+- [x] [Review][Patch] D3 applied: `body_lines()` now collects post-subject non-blank lines even when no blank-line separator is present; new test row `"subject\nBREAKING CHANGE: no blank separator"` → footer-detected → `MAJOR`. [`semvertag/_commit_parse.py:11-29`, `tests/unit/test_commit_parse.py`, `tests/unit/test_conventional_commits_strategy.py`]
+- [x] [Review][Patch] D4 applied: `_VALID_TYPE_RE = ^[a-z]+$` + `@pydantic.field_validator("minor_types", "patch_types")` on `ConventionalCommitsConfig` raises `ValidationError` on unreachable spellings (`"Feat"`, `"feat-x"`, `"feat2"`, `""`, `" feat"`, `"feat "`); positive + negative tests added. [`semvertag/strategies/conventional_commits.py:11,23-32`, `tests/unit/test_conventional_commits_strategy.py`]
+- [x] [Review][Patch] D5 applied: helper renamed `footers()` → `body_lines()`; consumers (`conventional_commits.py`) and tests updated; `__all__` reflects new name. [`semvertag/_commit_parse.py`, `semvertag/strategies/conventional_commits.py`, `tests/unit/test_commit_parse.py`]
+- [x] [Review][Patch] P1 applied: explicit test row `"  feat: foo"` (leading whitespace) → `Bump.NONE`. [`tests/unit/test_conventional_commits_strategy.py:177-180`]
+- [x] [Review][Patch] P2 applied: explicit test row `"feat : foo"` (space before colon) → `Bump.NONE`. [`tests/unit/test_conventional_commits_strategy.py:183-186`]
+- [x] [Review][Patch] P3 applied: dedicated `test_body_lines_strips_carriage_returns_from_crlf_input` asserts `body_lines()` output contains no `\r` characters, so a regression from `splitlines()` to `split("\n")` would fail loudly. [`tests/unit/test_commit_parse.py:60-64`]
+- [x] [Review][Patch] P4 applied: `tests/unit/test_ioc.py` `_settings()` constructs via kwargs and is typed `Literal[…]`, so validators run on every call. [`tests/unit/test_ioc.py:12-22`]
+- [x] [Review][Patch] P5 applied: non-gitlab provider gate test is now `@pytest.mark.parametrize("provider", ["github", "bitbucket"])`. [`tests/unit/test_ioc.py:42-48`]
+- [x] [Review][Patch] P6 applied: `test_redact.py` adds per-prefix min-length (20-char body) cases (`test_redacts_github_token_at_minimum_body_length`), prefix-at-start/end cases (`test_redacts_github_token_at_start_and_end_of_input`), and word-boundary punctuation cases (`test_redacts_github_token_when_followed_by_word_boundary_punctuation`) for all 5 new GitHub prefixes. [`tests/unit/test_redact.py:99-135`]
+- [x] [Review][Patch] P7 applied: `tests/integration/README.md` now cites `test_gitlab_provider.py:848-849, 862-863, 876-877`.
+- [x] [Review][Patch] P8 applied: Story `Dev Notes §Story framing` adds a "Marina-journey narrative (post-implementation)" subsection clarifying the actual `no_merge_commit` vs `MAJOR` outcome.
+
+**Defer** (pre-existing, future-proofing, or do-not-touch surface):
+
+- [x] [Review][Defer] Future-strategy dispatch guard — current `if settings.strategy == "conventional-commits"` has no `else: raise`; pydantic `Literal` catches typos today, but adding a third strategy without updating dispatch would silently fall through to branch-prefix [`semvertag/ioc.py:154-156`]
+- [x] [Review][Defer] `ConventionalCommitsConfig` lacks cross-validation: overlap between `minor_types`/`patch_types`, empty tuples, types unreachable by the regex are all silently accepted [`semvertag/strategies/conventional_commits.py:15-19`]
+- [x] [Review][Defer] `commit.message == None` would raise `AttributeError` from `splitlines()`; relies on `Commit.message: str` Protocol contract [`semvertag/_commit_parse.py:5`]
+- [x] [Review][Defer] BOM (U+FEFF) at start of message defeats `^[a-z]+` anchor; rare with GitLab/GitHub-produced messages [`semvertag/strategies/conventional_commits.py:11`]
+- [x] [Review][Defer] `_TOKEN_PATTERN` greedy matches have no upper bound; adjacent concatenated tokens can leak the second prefix after redaction (over-redaction safe; pre-existing pattern for the hex branch) [`semvertag/_redact.py:6-15`]
+- [x] [Review][Defer] Whitespace-only "blank" line between subject and footers is treated as the separator [`semvertag/_commit_parse.py:18,22`]
+- [x] [Review][Defer] Hex-token `\b` word-boundary semantics: `_` is a word-char in Python `re`, so `_<40hex>` won't redact — pre-existing, not introduced by this diff [`semvertag/_redact.py:15`]
+- [x] [Review][Defer] Add `branch_prefix` regression test row asserting leading-blank-line message behavior after the `subject_line()` refactor — blocked because `tests/unit/test_branch_prefix_strategy.py` is on the do-not-touch list for this story [`tests/unit/test_branch_prefix_strategy.py`]
+
+**Dismissed as noise** (8): `BREAKING CHANGE  :` extra whitespace rejection (spec-strict correct); README code-block presence (spec said "no code blocks needed", not forbidden); AC12 coupling-test split across two files (coverage exists, organizational); `__all__` ordering (`ruff` RUF022 sorts alphabetically); Marina test brittleness (passes; legitimately tests `no_merge_commit` outcome); scope regex `[^)]+` permissiveness (intentional latitude); token charset/family doc-comments (CLAUDE.md no-comments policy); silent fallback on typo'd `SEMVERTAG_STRATEGY` (closed by `Settings.strategy: typing.Literal[...]` at `_settings.py:64`).
 
 ## Dev Notes
 
@@ -359,6 +400,8 @@ def footers(message: str) -> list[str]:
 This story closes **Epic 2** — Conventional Commits Strategy & Per-Repo Switching — in one shot. There is only one story in Epic 2 because the work is tightly scoped: one new strategy class, one DI Group entry, one helper module (shared with branch-prefix), and a handful of tests. The provider fail-fast gate (Story 1.7) for non-`gitlab` providers stays in place — Epic 2 is strategy-only.
 
 After this story lands, the PRD's **Journey 2 (Marina)** is deliverable: a platform engineer mid-migration flips a single GitLab pilot project from `branch-prefix` to `conventional-commits` via a project-level `SEMVERTAG_STRATEGY=conventional-commits` CI variable. No code change, no toolchain swap, no `.semvertag.toml` (file-based config remains deferred to v1.x per PRD FR23/FR24).
+
+**Marina-journey narrative (post-implementation):** the integration test `test_marina_journey_same_fixture_different_strategies_produces_different_bumps` uses the squash-merge fixture `"feat!: drop python 3.9"` for both strategies. Branch-prefix sees no `Merge branch` marker and emits `no_merge_commit` (no tag created); conventional-commits parses the `!` and emits `MAJOR → 2.0.0`. The journey is demonstrated as **same fixture, divergent outcomes** — `no_merge_commit` vs `MAJOR`, not the original `MINOR (1.5.0)` vs `MAJOR (2.0.0)` framing that pre-dated the `subject_line()`-only parse decision. See `Dev Agent Record §Debug Log References` for the fixture rationale.
 
 The story also discharges **4 Epic 1 retrospective action items** baked into the ACs:
 
@@ -544,20 +587,67 @@ After this story:
 
 ### Agent Model Used
 
-_To be filled in by the dev agent_
+claude-opus-4-7 (1M context) — bmad-dev-story workflow
 
 ### Debug Log References
 
-_To be filled in by the dev agent — record any architecture/library deviations encountered_
+- **Marina test fixture refactored mid-implementation.** Initial test used `"Merge branch 'feature/foo' into main\n\nfeat!: breaking foo"` as a fixture for both strategies. CC strategy parses **only the subject line** (`_commit_parse.subject_line()` returns `"Merge branch 'feature/foo' into main"`), so `_TYPE_PATTERN.match()` failed and CC returned `Bump.NONE`. The test now uses `"feat!: drop python 3.9"` (squash-merge style): branch-prefix returns `no_merge_commit` (no "Merge branch" marker), CC returns `MAJOR` → `2.0.0`. The journey is still demonstrated — same fixture, divergent bumps.
+- **U+2028 / U+2029 literal in test source tripped `RUF001` (ambiguous character).** Replaced with ` ` / ` ` escape sequences in `tests/unit/test_commit_parse.py:8-9`. Runtime behavior identical; lint passes.
+- **`_build_json_output(settings)` / `_build_rich_output(settings)` lifted to module scope in `ioc.py`** (already done in Story 1.7 post-review). Verified the lazy-import discipline remains only on provider/strategy modules (architectural mandate). The new `_build_conventional_commits_strategy` lazy-imports `ConventionalCommitsStrategy` from its module to match `_build_branch_prefix_strategy`'s pattern.
+- **Strategy dispatch via `container.override(StrategiesGroup.branch_prefix_strategy, cc_instance)`.** modern-di's installed API does not expose per-kwarg override; overriding the resolved provider instance is the equivalent and Story 1.7's pattern (output rich→json swap). Trade-off: when `settings.strategy == "conventional-commits"`, the Factory named `branch_prefix_strategy` resolves to a `ConventionalCommitsStrategy` instance. Counter-intuitive but correct — `UseCasesGroup` binds to the Factory ID at declaration time; the override redirects what that ID resolves to at run-time.
+- **A1 reassessed (retrospective action item) and discharged as not-needed.** The architecture (`_bmad/architecture.md:345`) explicitly chose single-commit input for `BumpStrategy.decide`. ConventionalCommitsStrategy parses only the latest merge-commit's subject + footers; no Provider Protocol extension needed.
+- **Tests/unit/test_ioc.py NEW.** Three tests cover strategy dispatch (default branch-prefix; CC override; non-gitlab ConfigError). Resolves only `StrategiesGroup.branch_prefix_strategy` directly (avoids triggering provider construction and HTTP-client init in a unit test).
 
 ### Completion Notes List
 
-_To be filled in by the dev agent_
+- All 15 ACs (AC1–AC15) verified by **81 new tests** (24 commit-parse + 31 CC strategy + 3 ioc-dispatch + 6 strategy-switching integration + 3 provenance regression + 14 redact extension). Full suite: **324 tests passed** (Epic 1 baseline 243, +81 net add), 0 regressions in Stories 1.1–1.7.
+- Coverage: `conventional_commits.py` **100% line + 100% branch** (new gate via `just test-cc-strategies`); `branch_prefix.py` **100% line + 100% branch** (Story 1.6 gate preserved after `_commit_parse.subject_line` refactor); `_commit_parse.py` **100%**; `_redact.py` **100%**; global **93%** (above 85% NFR22 gate).
+- `just lint-ci` clean (`eof-fixer`, `ruff format`, `ruff check`, `ty check`).
+- `uv build` produces wheel + sdist.
+- Story 1.7 strategy fail-fast gate (`ioc.py:141-143`) removed; provider gate (`ioc.py:138-140`) preserved per AC6 / story framing.
+- 4 retro action items discharged: A2 (provenance regression tests in `test_provenance.py`), A3 (`_commit_parse.py` shared helper + `branch_prefix.py` refactor), A4 (5 GitHub token-family patterns added to `_redact.py`), A5 (`tests/integration/README.md` documents `_transport.time.sleep` coupling). A1 documented as not-needed; A6 discharged (no `_bmad/epics.md` update).
+- `__main__.py` and `_use_case.py` unchanged — Story 1.7's framing held: `_status_for_no_bump`/`_reason_for_no_bump` already branched on strategy name, and the entrypoint already routed `--strategy` into the overlay.
+- No new dependencies; `pyproject.toml` unchanged.
 
 ### File List
 
-_To be filled in by the dev agent_
+- **New:** `semvertag/_commit_parse.py` (24 stmts — `subject_line()`, `footers()`).
+- **New:** `semvertag/strategies/conventional_commits.py` (33 stmts — adds `ConventionalCommitsStrategy`; `ConventionalCommitsConfig` unchanged).
+- **New:** `tests/unit/test_commit_parse.py` (24 cases covering AC9).
+- **New:** `tests/unit/test_conventional_commits_strategy.py` (31 cases covering AC10).
+- **New:** `tests/unit/test_ioc.py` (3 cases covering AC6 dispatch + provider gate).
+- **New:** `tests/integration/test_strategy_switching.py` (6 cases covering AC11; includes Marina's journey).
+- **New:** `tests/integration/README.md` (AC14 / retro A5 — `_transport.time.sleep` coupling note).
+- **Modified:** `semvertag/strategies/branch_prefix.py` (use `_commit_parse.subject_line` per AC9 / retro A3; 100% branch gate preserved).
+- **Modified:** `semvertag/ioc.py` (add `ConventionalCommitsStrategy` lazy-import; add `_build_conventional_commits_strategy` creator; add `conventional_commits_strategy` Factory to `StrategiesGroup`; remove strategy fail-fast gate; add `container.override` dispatch when `settings.strategy == "conventional-commits"`).
+- **Modified:** `semvertag/_redact.py` (extend `_TOKEN_PATTERN` with 5 GitHub token-family alternations per AC13 / retro A4).
+- **Modified:** `tests/unit/test_provenance.py` (3 new regression tests per AC12 / retro A2).
+- **Modified:** `tests/unit/test_redact.py` (parametrized cases for 5 new GitHub prefixes).
+- **Modified:** `Justfile` (new `test-cc-strategies` recipe per AC15).
+- **Modified:** `_bmad/sprint-status.yaml` (`2-1-…: ready-for-dev → in-progress → review`).
+- **Modified:** `_bmad/2-1-…md` (Status, all task/subtask checkboxes, Dev Agent Record).
+- **No-change confirmed:** `semvertag/__main__.py`, `semvertag/_use_case.py`, `semvertag/_settings.py`, `semvertag/_types.py`, `semvertag/_errors.py`, `semvertag/_output.py`, `semvertag/_transport.py`, `semvertag/providers/_base.py`, `semvertag/providers/gitlab.py`, `tests/conftest.py`, `tests/integration/conftest.py`, `tests/integration/test_cli_main_verb.py`, `tests/integration/test_cli_quiet_json_matrix.py`, `tests/integration/test_gitlab_provider.py`, `tests/unit/conftest.py`, `tests/unit/test_branch_prefix_strategy.py`, `tests/unit/test_settings.py`, `tests/unit/test_use_case.py`, `tests/test_smoke.py`, `pyproject.toml`.
 
 ### Change Log
 
-_To be filled in by the dev agent_
+- 2026-05-28 — Added `semvertag/_commit_parse.py` with `subject_line()` and `footers()` per AC9. Uses `splitlines()` (handles `\n`, `\r\n`, U+2028 LS, U+2029 PS).
+- 2026-05-28 — Refactored `semvertag/strategies/branch_prefix.py:26` to call `_commit_parse.subject_line(commit.message)` in place of `commit.message.split("\n", 1)[0]`. Story 1.6 100% branch gate preserved.
+- 2026-05-28 — Added `ConventionalCommitsStrategy` in `semvertag/strategies/conventional_commits.py` per AC1–AC5. Regex `^(?P<type>[a-z]+)(?:\((?P<scope>[^)]+)\))?(?P<bang>!?):` captures type/scope/`!`; footer scan for `BREAKING CHANGE:` / `BREAKING-CHANGE:` (case-sensitive per CC v1.0.0).
+- 2026-05-28 — Wired `ConventionalCommitsStrategy` in `semvertag/ioc.py` per AC6. Removed Story 1.7 strategy fail-fast gate; added `container.override(StrategiesGroup.branch_prefix_strategy, cc_instance)` dispatch when `settings.strategy == "conventional-commits"`.
+- 2026-05-28 — Added 31 unit tests in `tests/unit/test_conventional_commits_strategy.py` exercising AC2–AC5 paths and 100% branch coverage.
+- 2026-05-28 — Added 24 unit tests in `tests/unit/test_commit_parse.py` covering AC9 cases (CRLF, U+2028/U+2029, leading-blank, footer extraction).
+- 2026-05-28 — Added 3 unit tests in `tests/unit/test_ioc.py` covering strategy dispatch (default + CC override) and non-gitlab provider rejection.
+- 2026-05-28 — Added 6 integration tests in `tests/integration/test_strategy_switching.py` covering AC11; includes Marina's journey.
+- 2026-05-28 — Added 3 provenance regression tests in `tests/unit/test_provenance.py` covering AC12 / retro A2.
+- 2026-05-28 — Extended `semvertag/_redact.py:_TOKEN_PATTERN` with 5 GitHub token-family alternations (`gho_`, `ghu_`, `ghs_`, `ghr_`, `github_pat_`) per AC13 / retro A4. Parametrized tests added in `tests/unit/test_redact.py`.
+- 2026-05-28 — Added `tests/integration/README.md` documenting `_transport.time.sleep` monkeypatch coupling per AC14 / retro A5.
+- 2026-05-28 — Added `test-cc-strategies` recipe to `Justfile` per AC15.
+- 2026-05-28 — Bumped Status to `review`; will flip to `done` after `bmad-code-review`.
+- 2026-05-29 — `bmad-code-review` complete. 5 decision-needed + 8 patches applied; 8 deferred to `_bmad/deferred-work.md`; 8 dismissed as noise.
+- 2026-05-29 — D1: introduced `current_strategy` Factory in `StrategiesGroup`; `UseCasesGroup.semvertag_use_case` now binds to `current_strategy`; the `container.override(StrategiesGroup.branch_prefix_strategy, ...)` dispatch removed from `build_container`. Named `branch_prefix_strategy` and `conventional_commits_strategy` Factories retained for direct-resolve use (future shadow-mode).
+- 2026-05-29 — D2: `decide()` `lstrip()`s each `body_lines()` entry before `startswith` — indented `BREAKING CHANGE:` footers now detected.
+- 2026-05-29 — D3: `body_lines()` now collects post-subject non-blank lines even without a blank-line separator — lenient footer parse.
+- 2026-05-29 — D4: added `_VALID_TYPE_RE` and `@pydantic.field_validator("minor_types", "patch_types")` rejecting non-`[a-z]+$` spellings at config-load.
+- 2026-05-29 — D5: renamed `_commit_parse.footers()` → `body_lines()` (helper now honestly reflects its semantics); consumers and tests updated.
+- 2026-05-29 — P1/P2 added negative test rows (`"  feat: foo"` and `"feat : foo"` → `Bump.NONE`). P3 added `test_body_lines_strips_carriage_returns_from_crlf_input` to lock `\r`-free body lines. P4 replaced `Settings.model_copy(update=...)` with constructor kwargs in `test_ioc.py`. P5 parametrized non-gitlab gate test over `["github", "bitbucket"]`. P6 added per-prefix min-length + word-boundary + start-of-input cases in `test_redact.py`. P7 cited `test_gitlab_provider.py:848-849, 862-863, 876-877` in `tests/integration/README.md`. P8 clarified Marina-journey wording in `Dev Notes §Story framing`.
+- 2026-05-29 — Suite: 356 tests pass (was 324; net +32 review-cycle tests). `branch_prefix.py` and `conventional_commits.py` both 100% line + branch. Global line coverage 94%. `just lint-ci`, `uv run ty check`, `uv build` all clean. Status flipped `review` → `done`.

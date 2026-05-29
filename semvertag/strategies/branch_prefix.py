@@ -3,6 +3,7 @@ import typing
 
 import pydantic
 
+from semvertag._commit_parse import subject_line
 from semvertag._types import Bump, Commit
 
 
@@ -23,7 +24,7 @@ class BranchPrefixStrategy:
     config: BranchPrefixConfig
 
     def decide(self, commit: Commit) -> Bump:
-        subject: typing.Final = commit.message.split("\n", 1)[0]
+        subject: typing.Final = subject_line(commit.message)
         if self.config.merge_mark_text not in subject:
             return Bump.NONE
         if any(prefix in subject for prefix in self.config.minor):

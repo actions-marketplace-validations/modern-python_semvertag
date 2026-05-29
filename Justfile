@@ -24,3 +24,6 @@ test-branch:
 
 test-branch-strategies:
     uv run --no-sync pytest -o "addopts=" --cov=semvertag.strategies.branch_prefix --cov-branch --cov-fail-under=100 --cov-report=term-missing tests/unit/test_branch_prefix_strategy.py
+
+test-cc-strategies:
+    uv run --no-sync pytest -o "addopts=" --cov=semvertag.strategies.conventional_commits --cov-branch --cov-fail-under=100 --cov-report=term-missing tests/unit/test_conventional_commits_strategy.py

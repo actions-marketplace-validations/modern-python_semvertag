@@ -189,3 +189,39 @@ def test_cli_overlay_records_provenance_for_quiet() -> None:
     )
     assert overlaid.quiet is True
     assert overlaid._provenance["quiet"] == ConfigSource(layer="cli", detail=_CLI_QUIET_FLAG)
+
+
+@pytest.mark.usefixtures("clean_settings_env")
+def test_cli_overlay_strategy_wins_over_conflicting_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SEMVERTAG_STRATEGY", "branch-prefix")
+    settings: typing.Final = Settings()
+    assert settings.strategy == "branch-prefix"
+    overlaid: typing.Final = apply_cli_overlay(
+        settings,
+        {"strategy": ("conventional-commits", _CLI_STRATEGY_FLAG)},
+    )
+    assert overlaid.strategy == "conventional-commits"
+    assert overlaid._provenance["strategy"] == ConfigSource(layer="cli", detail=_CLI_STRATEGY_FLAG)
+
+
+@pytest.mark.usefixtures("clean_settings_env")
+def test_cli_overlay_provider_wins_over_conflicting_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SEMVERTAG_PROVIDER", "gitlab")
+    settings: typing.Final = Settings()
+    assert settings.provider == "gitlab"
+    overlaid: typing.Final = apply_cli_overlay(
+        settings,
+        {"provider": ("github", "--provider")},
+    )
+    assert overlaid.provider == "github"
+    assert overlaid._provenance["provider"] == ConfigSource(layer="cli", detail="--provider")
+
+
+@pytest.mark.usefixtures("clean_settings_env")
+def test_env_quiet_survives_when_cli_flag_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SEMVERTAG_QUIET", "true")
+    settings: typing.Final = Settings()
+    assert settings.quiet is True
+    overlaid: typing.Final = apply_cli_overlay(settings, {})
+    assert overlaid.quiet is True
+    assert overlaid._provenance["quiet"].layer == "env"

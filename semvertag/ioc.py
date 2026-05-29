@@ -13,7 +13,9 @@ from semvertag._use_case import SemvertagUseCase
 
 if typing.TYPE_CHECKING:
     from semvertag.providers.gitlab import GitLabProvider
+    from semvertag.strategies._base import BumpStrategy
     from semvertag.strategies.branch_prefix import BranchPrefixStrategy
+    from semvertag.strategies.conventional_commits import ConventionalCommitsStrategy
 
 
 def _build_rich_output(settings: Settings) -> RichOutput:
@@ -53,6 +55,18 @@ def _build_branch_prefix_strategy(settings: Settings) -> "BranchPrefixStrategy":
     from semvertag.strategies.branch_prefix import BranchPrefixStrategy  # noqa: PLC0415
 
     return BranchPrefixStrategy(config=settings.branch_prefix)
+
+
+def _build_conventional_commits_strategy(settings: Settings) -> "ConventionalCommitsStrategy":
+    from semvertag.strategies.conventional_commits import ConventionalCommitsStrategy  # noqa: PLC0415
+
+    return ConventionalCommitsStrategy(config=settings.conventional_commits)
+
+
+def _build_current_strategy(settings: Settings) -> "BumpStrategy":
+    if settings.strategy == "conventional-commits":
+        return _build_conventional_commits_strategy(settings)
+    return _build_branch_prefix_strategy(settings)
 
 
 def _close_provider_client(provider: "GitLabProvider") -> None:
@@ -99,6 +113,20 @@ class StrategiesGroup(modern_di.Group):
         skip_creator_parsing=True,
         bound_type=None,
     )
+    conventional_commits_strategy = providers.Factory(
+        scope=Scope.APP,
+        creator=_build_conventional_commits_strategy,
+        kwargs={"settings": SettingsGroup.settings},
+        skip_creator_parsing=True,
+        bound_type=None,
+    )
+    current_strategy = providers.Factory(
+        scope=Scope.APP,
+        creator=_build_current_strategy,
+        kwargs={"settings": SettingsGroup.settings},
+        skip_creator_parsing=True,
+        bound_type=None,
+    )
 
 
 class UseCasesGroup(modern_di.Group):
@@ -107,7 +135,7 @@ class UseCasesGroup(modern_di.Group):
         creator=SemvertagUseCase,
         kwargs={
             "provider": ProvidersGroup.gitlab_provider,
-            "strategy": StrategiesGroup.branch_prefix_strategy,
+            "strategy": StrategiesGroup.current_strategy,
             "output": OutputsGroup.rich_output,
         },
         skip_creator_parsing=True,
@@ -132,9 +160,6 @@ def build_container(
 ) -> modern_di.Container:
     if settings.provider != "gitlab":
         msg = f"Provider {settings.provider!r} not yet supported; v1.0 supports gitlab only."
-        raise ConfigError(msg)
-    if settings.strategy != "branch-prefix":
-        msg = f"Strategy {settings.strategy!r} not yet wired; v1.0 supports branch-prefix only."
         raise ConfigError(msg)
     container: typing.Final = modern_di.Container(
         groups=ALL_GROUPS,
