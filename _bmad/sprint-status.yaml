@@ -1,5 +1,5 @@
 # generated: 2026-05-26
-# last_updated: 2026-05-29 (Story 4.1 created — ready-for-dev; epic-4 backlog → in-progress)
+# last_updated: 2026-05-29 (Story 4.1 implementation landed — Status: review; awaiting code-review)
 # project: semvertag
 # project_key: NOKEY
 # tracking_system: file-system
@@ -37,7 +37,7 @@
 generated: 2026-05-26
 last_updated: 2026-05-29
 project: semvertag
-last_updated_note: "Story 4.1 (CI workflow polish) created — Status: ready-for-dev. First story in Epic 4 (Public-Launch Readiness); epic-4 transitions backlog → in-progress. Scope: workflow YAML + README badges only — adds pip-audit job (NFR12), codecov v4.0.1 → v5.5.1 bump with fork-safe `if:` guard, LOC gate step printing semvertag/**/*.py count with ::warning:: above 1500 (NFR21 soft target), top-level permissions: contents: read, per-job timeout-minutes, and NEW .github/workflows/dependency-update.yml with quarterly cron '0 9 1 */3 *' (upgrade mode: uv lock --upgrade + peter-evans/create-pull-request@v6) and daily '0 9 * * *' safety check (uv lock --check, warning-only). Architecture pins preserved: astral-sh/setup-uv@v3, extractions/setup-just@v2 (5 and 2 majors behind current stable; flagged as Open Question OQ3 for architecture-amendment follow-up). Closes 4 Story-1.1 deferred items: codecov-action token bugs, fork-safe guard absence, missing timeout-minutes, missing permissions: block. Zero changes to semvertag/**/*.py, tests/**/*.py, pyproject.toml, or Justfile. 14 ACs, 9 tasks, 6 Open Questions logged. Next: dev-story to land 4-1."
+last_updated_note: "Story 4.1 (CI workflow polish) landed — Status: review. Implementation touches only `.github/workflows/ci.yml` (UPDATE), `.github/workflows/dependency-update.yml` (NEW), `README.md` (badge block), this story file, and sprint-status.yaml. AC1-AC14 verified locally: pip-audit job parallel to lint/pytest (v1.1.0, inputs: ., **/uv.lock cache); codecov bumped v4.0.1 → v5.5.1 with fork-safe `if:` guard; LOC gate `loc_gate` step appended to lint job (local count = 1541 — over the 1500 NFR21 soft target by 41; emits ::warning:: but exit 0 by design, flagged for code-review as new OQ7); top-level permissions: contents: read; timeout-minutes on lint=10, pytest=15, pip-audit=10; new dependency-update.yml with quarterly cron '0 9 1 */3 *' (upgrade mode: uv lock --upgrade + peter-evans/create-pull-request@v6), daily '0 9 * * *' safety check (uv sync --frozen + uv lock --check, warning-only), workflow_dispatch routes to upgrade. Architecture pins preserved: astral-sh/setup-uv@v3, extractions/setup-just@v2 per Constraint 2 / OQ3. Regression sweep clean: `just lint-ci` green; `just test` = 425 passed (matches 3.2 baseline byte-exactly); `just test-branch-strategies` / `test-cc-strategies` / `test-doctor` 100% branch each; `uv run ty check` clean; `uv build` clean. `actionlint` unavailable locally (Go binary, not on PyPI/brew/npm in this env) — used AC12's explicit YAML-parse fallback (both workflows parse via yaml.safe_load). `git diff HEAD -- semvertag/ tests/ pyproject.toml Justfile` empty (AC11 byte-exact). Closes 4 of 5 Story-1.1 deferred items (codecov token bugs, fork-safe guard, timeout-minutes, permissions: block); cache-dependency-glob misalignment partially closed (new pip-audit job uses **/uv.lock; lint/pytest preserved per AC13). Task 9 (deferred-work.md updates) intentionally pending — gated on post-review per the story spec. Next: code-review of 4-1 (recommend different LLM)."
 project_key: NOKEY
 tracking_system: file-system
 story_location: /Users/kevinsmith/src/pypi/autosemver/_bmad
@@ -67,7 +67,7 @@ development_status:
 
   # Epic 4: Public-Launch Readiness - Trust Surface, Distribution & Shadow-Mode
   epic-4: in-progress
-  4-1-ci-workflow-polish: ready-for-dev
+  4-1-ci-workflow-polish: review
   4-2-publish-workflow-via-trusted-publishing: backlog
   4-3a-github-actions-marketplace-wrapper: backlog
   4-3b-gitlab-ci-catalog-component: backlog

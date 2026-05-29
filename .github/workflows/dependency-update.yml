@@ -1,0 +1,67 @@
+name: dependency-update
+
+on:
+  schedule:
+    - cron: '0 9 1 */3 *'   # quarterly: 09:00 UTC, 1st of Jan/Apr/Jul/Oct
+    - cron: '0 9 * * *'     # daily 09:00 UTC safety check (no-op when lock is fresh)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: dependency-update
+  cancel-in-progress: false
+
+jobs:
+  lock-upgrade:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # MODE routing: quarterly cron -> upgrade; workflow_dispatch -> upgrade; everything else (daily cron) -> safety-check.
+    env:
+      MODE: ${{ github.event.schedule == '0 9 1 */3 *' && 'upgrade' || (github.event_name == 'workflow_dispatch' && 'upgrade' || 'safety-check') }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: extractions/setup-just@v2
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+      - run: uv python install 3.10
+
+      - name: Safety check (lock consistency)
+        if: env.MODE == 'safety-check'
+        run: |
+          uv sync --frozen
+          if ! uv lock --check; then
+            echo "::warning::uv lock --check detected drift; quarterly upgrade will reconcile."
+            exit 0
+          fi
+
+      - name: Upgrade lockfile
+        if: env.MODE == 'upgrade'
+        run: |
+          uv lock --upgrade
+          echo "## Lockfile diff" >> "$GITHUB_STEP_SUMMARY"
+          git --no-pager diff --stat uv.lock >> "$GITHUB_STEP_SUMMARY" || true
+
+      - name: Open PR with lockfile bump
+        if: env.MODE == 'upgrade'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: chore/dependency-update-${{ github.run_id }}
+          base: main
+          commit-message: "chore(deps): quarterly uv lock --upgrade"
+          title: "chore(deps): quarterly dependency update (uv lock --upgrade)"
+          body: |
+            Automated quarterly dependency update per NFR26.
+
+            ## Lockfile diff
+            See the workflow run for the `git diff --stat uv.lock` summary: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            ## Review window
+            Per NFR26, if no maintainer merges within 30 days, the build remains on the prior lock to avoid silent drift.
+          labels: dependencies,automated
+          signoff: false

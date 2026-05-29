@@ -1,6 +1,6 @@
 # Story 4.1: CI workflow polish — `pip-audit`, codecov upload, LOC gate, quarterly dependency-update cron
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -243,23 +243,23 @@ env:
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Modify `.github/workflows/ci.yml` — add top-level `permissions:` and per-job `timeout-minutes:` (AC5, AC6, AC13)**.
-  - [ ] 1.1 Add `permissions:` block under `concurrency:` (above `jobs:`):
+- [x] **Task 1: Modify `.github/workflows/ci.yml` — add top-level `permissions:` and per-job `timeout-minutes:` (AC5, AC6, AC13)**.
+  - [x] 1.1 Add `permissions:` block under `concurrency:` (above `jobs:`):
     ```yaml
     permissions:
       contents: read
     ```
-  - [ ] 1.2 Add `timeout-minutes: 10` to `jobs.lint` under `runs-on: ubuntu-latest`.
-  - [ ] 1.3 Add `timeout-minutes: 15` to `jobs.pytest` under `runs-on: ubuntu-latest`.
-  - [ ] 1.4 Verify no other change to the existing `lint` or `pytest` job step sequences (AC13 byte-identical preservation).
+  - [x] 1.2 Add `timeout-minutes: 10` to `jobs.lint` under `runs-on: ubuntu-latest`.
+  - [x] 1.3 Add `timeout-minutes: 15` to `jobs.pytest` under `runs-on: ubuntu-latest`.
+  - [x] 1.4 Verify no other change to the existing `lint` or `pytest` job step sequences (AC13 byte-identical preservation).
 
-- [ ] **Task 2: Modify `ci.yml` `pytest` job — bump codecov action and add fork-safe guard (AC2, AC13)**.
-  - [ ] 2.1 Bump `codecov/codecov-action@v4.0.1` → `codecov/codecov-action@v5.5.1` (preserves `env:`, `files:`, `flags:`, `name:` inputs verbatim).
-  - [ ] 2.2 Add `if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}` to the codecov step. The expression evaluates to `true` for push events and same-repo PRs, `false` for fork PRs — so fork PRs silently skip the upload.
-  - [ ] 2.3 Verify the `flags:`, `name:`, and `files:` inputs survive the bump unchanged (v5 retains the same input shape per the v5 migration notes).
+- [x] **Task 2: Modify `ci.yml` `pytest` job — bump codecov action and add fork-safe guard (AC2, AC13)**.
+  - [x] 2.1 Bump `codecov/codecov-action@v4.0.1` → `codecov/codecov-action@v5.5.1` (preserves `env:`, `files:`, `flags:`, `name:` inputs verbatim).
+  - [x] 2.2 Add `if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}` to the codecov step. The expression evaluates to `true` for push events and same-repo PRs, `false` for fork PRs — so fork PRs silently skip the upload.
+  - [x] 2.3 Verify the `flags:`, `name:`, and `files:` inputs survive the bump unchanged (v5 retains the same input shape per the v5 migration notes).
 
-- [ ] **Task 3: Modify `ci.yml` `lint` job — append LOC gate step (AC4)**.
-  - [ ] 3.1 Append a new step **after** `uv run --with-requirements docs/requirements.txt -- mkdocs build --strict` in the `lint` job:
+- [x] **Task 3: Modify `ci.yml` `lint` job — append LOC gate step (AC4)**.
+  - [x] 3.1 Append a new step **after** `uv run --with-requirements docs/requirements.txt -- mkdocs build --strict` in the `lint` job:
     ```yaml
     - id: loc_gate
       name: LOC gate (NFR21)
@@ -273,14 +273,14 @@ env:
           echo "::warning::LOC ${LOC} exceeds NFR21 soft target of 1500"
         fi
     ```
-  - [ ] 3.2 Verify the step exit code is `0` in both threshold cases — `wc -l` returns 0, the `if` branch's `echo` returns 0, no `exit 1` anywhere.
-  - [ ] 3.3 Verify the LOC formula counts only `semvertag/**/*.py`:
+  - [x] 3.2 Verify the step exit code is `0` in both threshold cases — `wc -l` returns 0, the `if` branch's `echo` returns 0, no `exit 1` anywhere.
+  - [x] 3.3 Verify the LOC formula counts only `semvertag/**/*.py`:
     - `find semvertag -name '*.py' -type f` — restricts to package source; excludes `tests/`, `docs/`, `_autosemver_reference/`, `_bmad/`, `site/`.
     - `awk 'NF && !/^[[:space:]]*#/'` — strips blank lines and full-line comments (NFR21's "lines of Python" implicitly means non-blank non-comment).
-  - [ ] 3.4 Smoke-test locally: run the same bash one-liner from a checked-out repo and confirm the printed number is plausible (~1,200 LOC after Story 3.2 per `_bmad/3-2-doctor-typer-subcommand-and-json-form.md:531`).
+  - [x] 3.4 Smoke-test locally: run the same bash one-liner from a checked-out repo and confirm the printed number is plausible (~1,200 LOC after Story 3.2 per `_bmad/3-2-doctor-typer-subcommand-and-json-form.md:531`). **Actual local measurement: 1541 LOC** — exceeds the 1500 soft target. Per NFR21 + Constraint 6, the gate emits `::warning::` and exits 0; flagged in Completion Notes for code-review attention (story 3.2's ~1200 prediction is now stale after 3.2's `_render.py` additions). NFR21 amendment / refactor to recover headroom is a separate story.
 
-- [ ] **Task 4: Modify `ci.yml` — add new `pip-audit` job (AC1, AC10, AC13)**.
-  - [ ] 4.1 Append a new top-level job under `jobs:`:
+- [x] **Task 4: Modify `ci.yml` — add new `pip-audit` job (AC1, AC10, AC13)**.
+  - [x] 4.1 Append a new top-level job under `jobs:`:
     ```yaml
     pip-audit:
       runs-on: ubuntu-latest
@@ -298,12 +298,12 @@ env:
           with:
             inputs: .
     ```
-  - [ ] 4.2 Pin `pypa/gh-action-pip-audit@v1.1.0` (the current stable major-v1 release per the action's GitHub releases page). Do NOT use `@v1` floating tag — the architecture's pinning discipline (`@v3` / `@v2` style for the architecturally-mandated set) is mirrored as `@v1.1.0` for new pins.
-  - [ ] 4.3 Use `cache-dependency-glob: "**/uv.lock"` (NOT `**/pyproject.toml` as in the existing jobs) — the deferred 1.1 item flagged that `pyproject.toml` glob is misaligned with `uv lock --upgrade`; for the `pip-audit` job the lock is the canonical input.
-  - [ ] 4.4 Use the default `vulnerability-service: PyPI` (do not override) — PyPI's advisory feed is canonical and covers the same OSV data the action would otherwise hit.
+  - [x] 4.2 Pin `pypa/gh-action-pip-audit@v1.1.0` (the current stable major-v1 release per the action's GitHub releases page). Do NOT use `@v1` floating tag — the architecture's pinning discipline (`@v3` / `@v2` style for the architecturally-mandated set) is mirrored as `@v1.1.0` for new pins.
+  - [x] 4.3 Use `cache-dependency-glob: "**/uv.lock"` (NOT `**/pyproject.toml` as in the existing jobs) — the deferred 1.1 item flagged that `pyproject.toml` glob is misaligned with `uv lock --upgrade`; for the `pip-audit` job the lock is the canonical input.
+  - [x] 4.4 Use the default `vulnerability-service: PyPI` (do not override) — PyPI's advisory feed is canonical and covers the same OSV data the action would otherwise hit.
 
-- [ ] **Task 5: Create new file `.github/workflows/dependency-update.yml` (AC7, AC8, AC9)**.
-  - [ ] 5.1 File skeleton:
+- [x] **Task 5: Create new file `.github/workflows/dependency-update.yml` (AC7, AC8, AC9)**.
+  - [x] 5.1 File skeleton:
     ```yaml
     name: dependency-update
 
@@ -372,35 +372,42 @@ env:
               labels: dependencies,automated
               signoff: false
     ```
-  - [ ] 5.2 Verify the cron expressions: quarterly `'0 9 1 */3 *'` fires on the 1st of months 1, 4, 7, 10 at 09:00 UTC; daily `'0 9 * * *'` fires every day at 09:00 UTC. Note: GitHub's cron is documented to use UTC; the quarterly + daily co-trigger on Jan/Apr/Jul/Oct 1st at 09:00 UTC is acceptable (both run independently; both check `env.MODE` and route correctly).
-  - [ ] 5.3 Verify the `MODE` expression: `github.event.schedule == '0 9 1 */3 *'` is `true` ONLY for the quarterly cron trigger; for any other schedule (the daily one) the first ternary is `false`, the second checks `workflow_dispatch`, otherwise falls through to `'safety-check'`. Manual `workflow_dispatch` always routes to `upgrade` (intentional — emergency-run path).
-  - [ ] 5.4 Verify `concurrency.group: dependency-update` is **shared across all triggers** (so a daily run can't interleave with a quarterly run mid-write). `cancel-in-progress: false` ensures an in-flight quarterly upgrade isn't killed by a daily safety check that started later.
-  - [ ] 5.5 Confirm `peter-evans/create-pull-request@v6` is the pin (not `@v8`); architecture's `@v3`/`@v2` pinning discipline (intentional under-pinning for stability) is mirrored at `@v6` for this action — see Open Questions OQ3.
+  - [x] 5.2 Verify the cron expressions: quarterly `'0 9 1 */3 *'` fires on the 1st of months 1, 4, 7, 10 at 09:00 UTC; daily `'0 9 * * *'` fires every day at 09:00 UTC. Note: GitHub's cron is documented to use UTC; the quarterly + daily co-trigger on Jan/Apr/Jul/Oct 1st at 09:00 UTC is acceptable (both run independently; both check `env.MODE` and route correctly).
+  - [x] 5.3 Verify the `MODE` expression: `github.event.schedule == '0 9 1 */3 *'` is `true` ONLY for the quarterly cron trigger; for any other schedule (the daily one) the first ternary is `false`, the second checks `workflow_dispatch`, otherwise falls through to `'safety-check'`. Manual `workflow_dispatch` always routes to `upgrade` (intentional — emergency-run path).
+  - [x] 5.4 Verify `concurrency.group: dependency-update` is **shared across all triggers** (so a daily run can't interleave with a quarterly run mid-write). `cancel-in-progress: false` ensures an in-flight quarterly upgrade isn't killed by a daily safety check that started later.
+  - [x] 5.5 Confirm `peter-evans/create-pull-request@v6` is the pin (not `@v8`); architecture's `@v3`/`@v2` pinning discipline (intentional under-pinning for stability) is mirrored at `@v6` for this action — see Open Questions OQ3.
 
-- [ ] **Task 6: Update `README.md` — add CI + codecov badges (AC3)**.
-  - [ ] 6.1 Add the badge block immediately under the existing top-of-file `# semvertag` heading:
+- [x] **Task 6: Update `README.md` — add CI + codecov badges (AC3)**.
+  - [x] 6.1 Add the badge block immediately under the existing top-of-file `# semvertag` heading:
     ```markdown
     [![CI](https://github.com/<org>/semvertag/actions/workflows/ci.yml/badge.svg)](https://github.com/<org>/semvertag/actions/workflows/ci.yml)
     [![codecov](https://codecov.io/gh/<org>/semvertag/branch/main/graph/badge.svg)](https://codecov.io/gh/<org>/semvertag)
     ```
-  - [ ] 6.2 Leave `<org>` as a literal placeholder (Story 4.7 / Launch Decisions Pending resolves it pre-launch).
-  - [ ] 6.3 Verify `README.md` rest-of-file is unchanged — the badge block is a 2-line addition, not a rewrite.
+  - [x] 6.2 Leave `<org>` as a literal placeholder (Story 4.7 / Launch Decisions Pending resolves it pre-launch).
+  - [x] 6.3 Verify `README.md` rest-of-file is unchanged — the badge block is a 2-line addition, not a rewrite.
 
-- [ ] **Task 7: Local validation (AC12, AC14 readiness)**.
-  - [ ] 7.1 `uvx actionlint .github/workflows/ci.yml .github/workflows/dependency-update.yml` — should exit 0. If `actionlint` is not on PATH, install via `uvx --from actionlint actionlint ...` or fall back to step 7.2.
-  - [ ] 7.2 Fallback: `python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml')); yaml.safe_load(open('.github/workflows/dependency-update.yml'))"` — verifies YAML parses (best-effort if `actionlint` is unavailable).
-  - [ ] 7.3 `just lint-ci` — confirms no `Justfile` invocation breakage (no Python changed, but the gate is the existing standard).
-  - [ ] 7.4 `just test` — confirms the existing test suite still green (no Python changed; this is regression-only sanity).
-  - [ ] 7.5 Run the LOC bash one-liner from Task 3.1 locally and capture the actual count for the PR description (sanity-check it lands ~1,200, well under 1,500).
-  - [ ] 7.6 Skip running `pip-audit` locally as a gate — the gate is the CI run on the PR (AC14). If the dev wants a preview, `uvx pip-audit -r <(uv export --format requirements-txt)` works but is not part of this story's local-validation cycle.
+- [x] **Task 7: Local validation (AC12, AC14 readiness)**.
+  - [x] 7.1 `uvx actionlint .github/workflows/ci.yml .github/workflows/dependency-update.yml` — `actionlint` is a Go binary not published to PyPI; `uvx actionlint` fails with "package not found", and `brew`/`npx` fallbacks are unavailable in this environment. Fell back to Task 7.2 per AC12 explicit allowance ("if `actionlint` is unavailable, the dev falls back to `yamllint` on both files").
+  - [x] 7.2 Fallback: `uv run --with pyyaml python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml')); yaml.safe_load(open('.github/workflows/dependency-update.yml'))"` — both files parse cleanly (`YAML OK`).
+  - [x] 7.3 `just lint-ci` — clean (eof-fixer, ruff format, ruff check, ty check all green).
+  - [x] 7.4 `just test` — 425 passed in 1.29s (matches Story 3.2 regression-canary baseline byte-exactly).
+  - [x] 7.5 Run the LOC bash one-liner from Task 3.1 locally and capture the actual count for the PR description. **Local measurement: `semvertag/**/*.py = 1541 LOC`** — exceeds the 1500 soft target by 41 lines (the LOC gate will print a `::warning::` but does NOT fail per NFR21 + Constraint 6). Cause: Story 3.2's `_render.py` (63 stmts) plus growth in `_settings.py` / `providers/gitlab.py` since the ~1200 prediction at `3-2-…:531`. Action: flag for NFR21 amendment / refactor follow-up in deferred-work post-review.
+  - [x] 7.6 Skipped local `pip-audit` per story instruction (CI is the gate).
+  - Additional regression gates (all clean):
+    - `just test-branch-strategies` — 26 passed, 100% branch coverage on `strategies.branch_prefix`.
+    - `just test-cc-strategies` — 44 passed, 100% branch coverage on `strategies.conventional_commits`.
+    - `just test-doctor` — 56 passed, 100% branch coverage on `doctor` package.
+    - `uv run ty check` — all checks passed.
+    - `uv build` — sdist + wheel built cleanly (the existing `uv_build` upper-bound warning is a pre-4.1 pyproject.toml issue, out of scope per Constraint 1).
+    - `git diff HEAD -- semvertag/ tests/ pyproject.toml Justfile` — empty (zero Python/test/build/recipe drift, confirming AC11 byte-exact).
 
-- [ ] **Task 8: Update `_bmad/sprint-status.yaml` and this story file (admin)**.
-  - [ ] 8.1 Bump `development_status['4-1-ci-workflow-polish']` from `ready-for-dev` → `in-progress` at dev-start.
-  - [ ] 8.2 Tick all task/subtask checkboxes as each lands.
-  - [ ] 8.3 Fill in Dev Agent Record (Agent Model Used / Debug Log References / Completion Notes / File List / Change Log) at land time.
-  - [ ] 8.4 Bump `development_status['4-1-ci-workflow-polish']` from `in-progress` → `review` when ready for code-review.
-  - [ ] 8.5 Set Status: `review` at the top of this file.
-  - [ ] 8.6 Update `last_updated` and `last_updated_note` in `sprint-status.yaml` with a one-line summary.
+- [x] **Task 8: Update `_bmad/sprint-status.yaml` and this story file (admin)**.
+  - [x] 8.1 Bump `development_status['4-1-ci-workflow-polish']` from `ready-for-dev` → `in-progress` at dev-start.
+  - [x] 8.2 Tick all task/subtask checkboxes as each lands.
+  - [x] 8.3 Fill in Dev Agent Record (Agent Model Used / Debug Log References / Completion Notes / File List / Change Log) at land time.
+  - [x] 8.4 Bump `development_status['4-1-ci-workflow-polish']` from `in-progress` → `review` when ready for code-review.
+  - [x] 8.5 Set Status: `review` at the top of this file.
+  - [x] 8.6 Update `last_updated` and `last_updated_note` in `sprint-status.yaml` with a one-line summary.
 
 - [ ] **Task 9: Post-review — update `_bmad/deferred-work.md` (admin)**.
   - [ ] 9.1 Append `## Deferred from: code review of 4-1-ci-workflow-polish (YYYY-MM-DD)` with any non-blocking decisions or discovered edge cases (e.g., setup-uv/setup-just version drift between architecture-mandated and current-stable — see Open Questions OQ3).
@@ -410,6 +417,8 @@ env:
     - "No `timeout-minutes` on CI jobs" — **CLOSED** by AC6.
     - "No explicit `permissions:` block on the workflow" — **CLOSED** by AC5.
     - "`setup-uv` `cache-dependency-glob: '**/pyproject.toml'` misaligned" — **PARTIALLY CLOSED** by AC1 (new `pip-audit` job uses `**/uv.lock`); the existing `lint` and `pytest` jobs retain the `**/pyproject.toml` glob to honor AC13 byte-identical preservation. Re-flag for follow-up.
+
+> **Note**: Task 9 (deferred-work updates) is gated on code-review per its own header ("Post-review"); intentionally left unchecked until code-review lands.
 
 ## Dev Notes
 
@@ -616,20 +625,75 @@ If the repo has branch protection on `main`, adding the `pip-audit` job to `ci.y
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+claude-opus-4-7 (1M context) — bmad-dev-story workflow, 2026-05-29
 
 ### Debug Log References
 
-- _(populated by dev during implementation)_
+- YAML syntax validation: `uv run --with pyyaml python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml')); yaml.safe_load(open('.github/workflows/dependency-update.yml'))"` → `YAML OK`.
+- `actionlint` unavailable locally (Go binary; not on PyPI; no `brew` keg installed; not on npm); used AC12's explicit YAML-parse fallback.
+- LOC gate one-liner executed locally against the working tree → `semvertag LOC = 1541`.
+- Source-tree drift check: `git diff HEAD -- semvertag/ tests/ pyproject.toml Justfile` returns empty (confirms AC11 byte-exact).
+- Regression suite (Python 3.13): `just test` → 425 passed in 1.29s (matches Story 3.2 baseline).
+- Coverage gates: `just test-branch-strategies` (26/26, 100% branch on `branch_prefix`); `just test-cc-strategies` (44/44, 100% branch on `conventional_commits`); `just test-doctor` (56/56, 100% branch on `doctor`).
+- `uv run ty check` → clean. `uv build` → wheel + sdist built; the pre-existing `uv_build` unbounded-version warning is out-of-scope per Constraint 1.
 
 ### Completion Notes List
 
-- _(populated by dev at land time — confirm: AC1–AC14 verified; deferred-work lineage closed per Task 9.2; Open Questions OQ1/OQ2/OQ3 logged either as resolved or carried forward in deferred-work; PR CI run is green across `lint` + `pytest` × 5 + `pip-audit`)_
+- **AC1 (`pip-audit` job)** — verified: new top-level `pip-audit` job at `ci.yml:78-90` runs in parallel with `lint`/`pytest` (no `needs:`); pins `pypa/gh-action-pip-audit@v1.1.0`; uses `inputs: .`; `cache-dependency-glob: "**/uv.lock"` per Task 4.3.
+- **AC2 (codecov bump + fork-safe guard)** — verified: bumped `codecov/codecov-action@v4.0.1` → `@v5.5.1` at `ci.yml:70`; fork-safe `if:` guard added; `files`, `flags`, `name`, `CODECOV_TOKEN` env all preserved byte-identical.
+- **AC3 (README badges)** — verified: two-line badge block under `# semvertag` heading; `<org>` left as literal placeholder per Story 4.7 / Launch Decisions Pending convention.
+- **AC4 (LOC gate)** — verified: step `loc_gate` appended to `lint` job after `mkdocs build --strict`; emits `::notice::` always, `::warning::` when `LOC > 1500`, never `exit 1`; outputs `semvertag_loc` for downstream consumption. **Local count = 1541, above the 1500 soft target by 41 lines**; gate emits warning as designed (NFR21 wording: "soft target visible in CI"). Refactor / NFR21 amendment is a separate decision — flagged in OQ7 below for code-review.
+- **AC5 (permissions:)** — verified: top-level `permissions: contents: read` added under `concurrency:` block at `ci.yml:13-14`; no job overrides.
+- **AC6 (timeout-minutes)** — verified: `lint: 10`, `pytest: 15`, `pip-audit: 10`; all at job-level under `runs-on:`.
+- **AC7 (new dependency-update.yml)** — verified: new file with quarterly + daily crons, `workflow_dispatch:`, `permissions: contents: write, pull-requests: write`, single `lock-upgrade` job, `timeout-minutes: 15`.
+- **AC8 (safety-check vs upgrade routing)** — verified: `MODE` env derived from `github.event.schedule` (quarterly → upgrade) and `github.event_name` (workflow_dispatch → upgrade); else `safety-check` runs `uv sync --frozen` + `uv lock --check`, surfaces `::warning::` and `exit 0` on drift, never opens a PR.
+- **AC9 (upgrade-mode PR via peter-evans/create-pull-request@v6)** — verified: upgrade step runs `uv lock --upgrade`, writes `git diff --stat uv.lock` to `$GITHUB_STEP_SUMMARY`; PR-creation step uses `secrets.GITHUB_TOKEN`, unique per-run branch `chore/dependency-update-${{ github.run_id }}`, commit/title/body/labels per spec, `base: main`, `signoff: false`. If `uv lock --upgrade` produces no diff, the PR step naturally creates no PR (peter-evans default behavior).
+- **AC10 (action pins + no Justfile duplication)** — verified: `astral-sh/setup-uv@v3`, `extractions/setup-just@v2`, `actions/checkout@v4`, `codecov/codecov-action@v5.5.1`, `pypa/gh-action-pip-audit@v1.1.0`, `peter-evans/create-pull-request@v6` — all pins match the architecturally-mandated set. No `run:` step duplicates a `Justfile` command line; the only inline `run:` invocations are `uv python install <ver>`, `uv build`, `uv lock --upgrade`, `uv lock --check`, `uv sync --frozen`, and the LOC bash one-liner — none of which exist as `Justfile` recipes.
+- **AC11 (no source/test/pyproject/Justfile changes)** — verified: `git diff HEAD -- semvertag/ tests/ pyproject.toml Justfile` is empty.
+- **AC12 (local YAML validation)** — verified via the `yaml.safe_load` fallback path that AC12 explicitly permits when `actionlint` is unavailable. `just lint-ci` clean.
+- **AC13 (existing CI behaviors preserved byte-identical)** — verified: `lint` job step order (`checkout` → `setup-just` → `setup-uv` w/ `**/pyproject.toml` cache → `uv python install 3.10` → `just install lint-ci` → `uv build` → `mkdocs build --strict`) is preserved exactly; the LOC gate is an APPEND. `pytest` job's matrix (3.10–3.14, `fail-fast: false`), `just install`, `just test . --cov=. --cov-report xml` step order preserved exactly; the only changes are `timeout-minutes: 15` (additive), the fork-safe `if:` (additive), and the codecov action version (v4.0.1 → v5.5.1) with input shape preserved. `name: main`, `on: push/pull_request`, `concurrency:` block all preserved byte-identical.
+- **AC14 (green CI run)** — N/A locally; gates pass on local mirrors (`just lint-ci`, `just test`, `just test-branch-strategies`, `just test-cc-strategies`, `just test-doctor`, `uv run ty check`, `uv build`). The on-PR CI verification is the maintainer's job at land time.
+- **Closes Story-1.1 deferred items** (queue for `deferred-work.md` at Task 9.2 post-review):
+  - codecov-action@v4.0.1 token-handling bugs — CLOSED via v5.5.1 bump.
+  - No fork-safe guard on codecov upload — CLOSED via `if:` guard.
+  - No `timeout-minutes` on CI jobs — CLOSED.
+  - No explicit `permissions:` block — CLOSED.
+  - `setup-uv` `cache-dependency-glob: '**/pyproject.toml'` misalignment — PARTIALLY CLOSED (new `pip-audit` job uses `**/uv.lock`; existing jobs preserved per AC13).
+- **Open questions / assumptions** (carry to code-review):
+  - OQ1 (pip-audit severity-threshold) — assumption: fail-on-any is acceptable; stricter than AC's "≥ medium" wording.
+  - OQ2 (codecov OIDC vs token) — assumption: stay on token in 4.1; OIDC is a separate trust-surface story.
+  - OQ3 (setup-uv@v3 / setup-just@v2 versus current stable v8/v4) — preserved per Constraint 2; needs architecture amendment.
+  - OQ4 (yank-induced false-positive in daily safety check) — accepted noise tolerance.
+  - OQ5 (`<org>` placeholder in README badges) — preserved per convention.
+  - OQ6 (`pip-audit` not auto-added to branch protection required-checks) — repo-settings action for maintainer post-merge.
+  - **NEW OQ7 — `semvertag/**/*.py` is 1541 LOC, over the NFR21 1500 soft target by 41 lines.** The LOC gate's `::warning::` will fire on every CI run starting from this story's merge. Options for code-review: (a) accept the warning as informational signal (current behavior); (b) tighten the awk filter (e.g., drop docstring lines) — likely brings us under 1500; (c) refactor `_render.py` / `providers/gitlab.py` to reclaim headroom; (d) amend NFR21 soft target to 1600 with a deferred-rationale.
 
 ### File List
 
-- _(populated by dev at land time — mirror the table in "Files this story touches" with concrete added/modified/no-change confirmations)_
+| File | Action | Notes |
+|---|---|---|
+| `.github/workflows/ci.yml` | UPDATE | Added `permissions: contents: read` (top-level); `timeout-minutes` on all 3 jobs; LOC gate step appended to `lint`; fork-safe `if:` guard on codecov step; codecov-action v4.0.1 → v5.5.1; new `pip-audit` job. Existing step order/inputs preserved byte-identical (AC13). |
+| `.github/workflows/dependency-update.yml` | NEW | Quarterly + daily cron, `workflow_dispatch:`, `permissions: contents: write, pull-requests: write`, `concurrency: dependency-update`, `MODE`-routed `safety-check` vs `upgrade` job body, `peter-evans/create-pull-request@v6`. |
+| `README.md` | UPDATE | 2-line badge block (CI + codecov) inserted under `# semvertag` heading. |
+| `_bmad/sprint-status.yaml` | UPDATE | `4-1-ci-workflow-polish: ready-for-dev → in-progress → review`; `last_updated` + `last_updated_note` refreshed. |
+| `_bmad/4-1-ci-workflow-polish.md` (this file) | UPDATE | Status, all checkboxes (Tasks 1-8; Task 9 deferred to post-review), Dev Agent Record, File List, Change Log. |
+| `_bmad/deferred-work.md` | NO-CHANGE | Task 9 is post-review; deferred to code-review-time. |
+| `semvertag/**/*.py` | NO-CHANGE | Explicitly forbidden per Constraint 1. Verified empty diff. |
+| `tests/**/*.py` | NO-CHANGE | Explicitly forbidden per Constraint 1. Verified empty diff. |
+| `pyproject.toml` | NO-CHANGE | Constraint 11 + AC11. Verified empty diff. |
+| `Justfile` | NO-CHANGE | Constraint 1 (LOC gate is inline bash per AC10). Verified empty diff. |
 
 ### Change Log
 
-- _(populated by dev at land time — one bullet per logical change, dated)_
+- 2026-05-29 — Added top-level `permissions: contents: read` to `ci.yml` (closes Story-1.1 deferred item "no explicit permissions block"). [AC5]
+- 2026-05-29 — Added `timeout-minutes` to all three CI jobs (lint=10, pytest=15, pip-audit=10) (closes Story-1.1 deferred item "no timeout-minutes"). [AC6]
+- 2026-05-29 — Bumped `codecov/codecov-action@v4.0.1` → `@v5.5.1` and added fork-safe `if:` guard on the upload step (closes Story-1.1 deferred items "codecov token bugs" and "no fork-safe guard"). [AC2]
+- 2026-05-29 — Added LOC gate step `loc_gate` to `lint` job: counts non-blank non-comment `semvertag/**/*.py` lines, emits `::notice::` always and `::warning::` above the 1500 NFR21 soft target, exit 0 in all cases. Local measurement: 1541 LOC (warning will fire — flagged for code-review per OQ7). [AC4]
+- 2026-05-29 — Added new `pip-audit` job to `ci.yml`, parallel to `lint`/`pytest`, pinned to `pypa/gh-action-pip-audit@v1.1.0` with `inputs: .` and `cache-dependency-glob: "**/uv.lock"`. [AC1, AC10]
+- 2026-05-29 — Created `.github/workflows/dependency-update.yml`: quarterly cron `'0 9 1 */3 *'` + daily `'0 9 * * *'` safety check + `workflow_dispatch:`, `MODE`-routed upgrade vs safety-check, `concurrency: dependency-update` shared across triggers (`cancel-in-progress: false`), opens PR via `peter-evans/create-pull-request@v6` on upgrade. [AC7, AC8, AC9, NFR26]
+- 2026-05-29 — Added CI + codecov badge block to `README.md` under `# semvertag` heading; `<org>` left as literal per pre-launch placeholder convention. [AC3]
+- 2026-05-29 — Verified zero changes to `semvertag/**/*.py`, `tests/**/*.py`, `pyproject.toml`, `Justfile` via `git diff HEAD`. [AC11]
+- 2026-05-29 — Regression suite green: 425 tests passed (matches Story 3.2 baseline); branch-strategy / CC-strategy / doctor 100% branch gates green; `ty check` clean; `uv build` clean.
+- 2026-05-29 — `actionlint` unavailable locally; used AC12's explicit `yaml.safe_load` fallback — both workflow files parse cleanly.
+- 2026-05-29 — Sprint status: `4-1-ci-workflow-polish` ready-for-dev → in-progress → review.
+- 2026-05-29 — **Maintainer follow-up (post-merge)**: ensure `pip-audit` job is added to branch-protection required-status-checks on `main` (OQ6).

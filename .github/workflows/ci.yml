@@ -10,9 +10,13 @@ concurrency:
   group: ${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: extractions/setup-just@v2
@@ -24,9 +28,21 @@ jobs:
       - run: just install lint-ci
       - run: uv build
       - run: uv run --with-requirements docs/requirements.txt -- mkdocs build --strict
+      - id: loc_gate
+        name: LOC gate (NFR21)
+        run: |
+          LOC=$(find semvertag -name '*.py' -type f -print0 \
+                | xargs -0 awk 'NF && !/^[[:space:]]*#/' \
+                | wc -l)
+          echo "::notice::semvertag/**/*.py = ${LOC} LOC (NFR21 soft target: 1500)"
+          echo "semvertag_loc=${LOC}" >> "$GITHUB_OUTPUT"
+          if [ "${LOC}" -gt 1500 ]; then
+            echo "::warning::LOC ${LOC} exceeds NFR21 soft target of 1500"
+          fi
 
   pytest:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -46,10 +62,28 @@ jobs:
       - run: uv python install ${{ matrix.python-version }}
       - run: just install
       - run: just test . --cov=. --cov-report xml
-      - uses: codecov/codecov-action@v4.0.1
+      # Fork-safe guard: same-repo PRs and push events upload; fork PRs (which lack CODECOV_TOKEN) silently skip.
+      - if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: codecov/codecov-action@v5.5.1
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
         with:
           files: ./coverage.xml
           flags: unittests
           name: codecov-${{ matrix.python-version }}
+
+  pip-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: extractions/setup-just@v2
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+      - run: uv python install 3.10
+      - run: just install
+      - uses: pypa/gh-action-pip-audit@v1.1.0
+        with:
+          inputs: .
