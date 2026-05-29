@@ -31,9 +31,27 @@ jobs:
       - id: loc_gate
         name: LOC gate (NFR21)
         run: |
-          LOC=$(find semvertag -name '*.py' -type f -print0 \
-                | xargs -0 awk 'NF && !/^[[:space:]]*#/' \
-                | wc -l)
+          # Non-blank, non-comment, non-docstring SLOC under semvertag/**/*.py.
+          # Docstring bodies are excluded per NFR21 wording ("non-blank non-comment").
+          # Recognises """-delimited docstrings only — this codebase doesn't use '''.
+          LOC=$(find semvertag -name '*.py' -type f -not -path '*/__pycache__/*' -print0 \
+                | xargs -0 awk '
+                    BEGIN { total = 0 }
+                    FNR == 1 { in_ds = 0 }
+                    {
+                      if (in_ds) {
+                        if ($0 ~ /"""[[:space:]]*$/) { in_ds = 0 }
+                        next
+                      }
+                      if ($0 ~ /^[[:space:]]*"""/) {
+                        if ($0 ~ /^[[:space:]]*""".*"""[[:space:]]*$/) { next }
+                        in_ds = 1
+                        next
+                      }
+                      if (NF && $0 !~ /^[[:space:]]*#/) { total++ }
+                    }
+                    END { print total }
+                  ')
           echo "::notice::semvertag/**/*.py = ${LOC} LOC (NFR21 soft target: 1500)"
           echo "semvertag_loc=${LOC}" >> "$GITHUB_OUTPUT"
           if [ "${LOC}" -gt 1500 ]; then
@@ -62,8 +80,10 @@ jobs:
       - run: uv python install ${{ matrix.python-version }}
       - run: just install
       - run: just test . --cov=. --cov-report xml
-      # Fork-safe guard: same-repo PRs and push events upload; fork PRs (which lack CODECOV_TOKEN) silently skip.
-      - if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+      # Fork-safe guard: explicit allowlist — push on main + same-repo PR. Any future
+      # event addition (schedule, workflow_dispatch, merge_group, pull_request_target)
+      # is excluded by default so CODECOV_TOKEN is not exposed to those contexts.
+      - if: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
         uses: codecov/codecov-action@v5.5.1
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
@@ -84,6 +104,10 @@ jobs:
           cache-dependency-glob: "**/uv.lock"
       - run: uv python install 3.10
       - run: just install
+      # Export the resolved lockfile to requirements format so pip-audit scans the
+      # pinned versions semvertag actually ships (not whatever pyproject.toml
+      # resolves to fresh today — its specifiers are unbounded).
+      - run: uv export --format requirements-txt --frozen --no-hashes --output-file requirements-audit.txt
       - uses: pypa/gh-action-pip-audit@v1.1.0
         with:
-          inputs: .
+          inputs: requirements-audit.txt

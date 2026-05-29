@@ -1,5 +1,5 @@
 # generated: 2026-05-26
-# last_updated: 2026-05-29 (Story 4.1 implementation landed — Status: review; awaiting code-review)
+# last_updated: 2026-05-29 (Story 4.1 code-review complete — Status: done; 10 patches applied across ci.yml + dependency-update.yml)
 # project: semvertag
 # project_key: NOKEY
 # tracking_system: file-system
@@ -37,7 +37,7 @@
 generated: 2026-05-26
 last_updated: 2026-05-29
 project: semvertag
-last_updated_note: "Story 4.1 (CI workflow polish) landed — Status: review. Implementation touches only `.github/workflows/ci.yml` (UPDATE), `.github/workflows/dependency-update.yml` (NEW), `README.md` (badge block), this story file, and sprint-status.yaml. AC1-AC14 verified locally: pip-audit job parallel to lint/pytest (v1.1.0, inputs: ., **/uv.lock cache); codecov bumped v4.0.1 → v5.5.1 with fork-safe `if:` guard; LOC gate `loc_gate` step appended to lint job (local count = 1541 — over the 1500 NFR21 soft target by 41; emits ::warning:: but exit 0 by design, flagged for code-review as new OQ7); top-level permissions: contents: read; timeout-minutes on lint=10, pytest=15, pip-audit=10; new dependency-update.yml with quarterly cron '0 9 1 */3 *' (upgrade mode: uv lock --upgrade + peter-evans/create-pull-request@v6), daily '0 9 * * *' safety check (uv sync --frozen + uv lock --check, warning-only), workflow_dispatch routes to upgrade. Architecture pins preserved: astral-sh/setup-uv@v3, extractions/setup-just@v2 per Constraint 2 / OQ3. Regression sweep clean: `just lint-ci` green; `just test` = 425 passed (matches 3.2 baseline byte-exactly); `just test-branch-strategies` / `test-cc-strategies` / `test-doctor` 100% branch each; `uv run ty check` clean; `uv build` clean. `actionlint` unavailable locally (Go binary, not on PyPI/brew/npm in this env) — used AC12's explicit YAML-parse fallback (both workflows parse via yaml.safe_load). `git diff HEAD -- semvertag/ tests/ pyproject.toml Justfile` empty (AC11 byte-exact). Closes 4 of 5 Story-1.1 deferred items (codecov token bugs, fork-safe guard, timeout-minutes, permissions: block); cache-dependency-glob misalignment partially closed (new pip-audit job uses **/uv.lock; lint/pytest preserved per AC13). Task 9 (deferred-work.md updates) intentionally pending — gated on post-review per the story spec. Next: code-review of 4-1 (recommend different LLM)."
+last_updated_note: "Story 4.1 code-review complete — Status: done. 10 patches applied (5 from decision-needed + 5 direct): (1) gh workflow run ci.yml --ref re-trigger step added so the quarterly dependency-update PR gets CI signal (closes NFR26 gap the impl otherwise had); (2) uv export --format requirements-txt --frozen --no-hashes step prepended to pip-audit so the audit scans the actually-shipped uv.lock pins, not pyproject's unbounded specifiers (closes NFR12 gap); (3) SHA-pinned all 4 actions in dependency-update.yml (write-scope workflow): actions/checkout@34e1148, extractions/setup-just@dd310ad, astral-sh/setup-uv@caf0cab, peter-evans/create-pull-request@c5a7806 (ci.yml stays on tag pins per architecture policy); (4) codecov fork-safe guard tightened to explicit allowlist event_name == 'push' || (pull_request && head.repo.full_name == github.repository); (5) LOC awk tightened to skip docstring bodies — count 1541 → 1535 (still 35 over the 1500 soft target; OQ7 stays); (6) id: create_pr + pull-request-number step-summary capture (AC9); (7) unreachable uv sync --frozen dropped from daily safety-check, kept only uv lock --check wrapped warning-only; (8) issues: write + actions: write permissions added for label auto-create and gh workflow run re-trigger; (9) add-paths: uv.lock added to peter-evans to scope staging; (10) MODE routing rewritten as explicit Route step that fails loud on unexpected event/schedule. Gates green: lint-ci, 425 tests, branch/cc/doctor 100% branch, ty, uv build, both workflow YAMLs parse via yaml.safe_load. AC11 byte-exact preserved (git diff HEAD -- semvertag/ tests/ pyproject.toml Justfile empty). 8 deferred items captured in deferred-work.md. Epic 4 next: 4-2-publish-workflow-via-trusted-publishing (backlog)."
 project_key: NOKEY
 tracking_system: file-system
 story_location: /Users/kevinsmith/src/pypi/autosemver/_bmad
@@ -67,7 +67,7 @@ development_status:
 
   # Epic 4: Public-Launch Readiness - Trust Surface, Distribution & Shadow-Mode
   epic-4: in-progress
-  4-1-ci-workflow-polish: review
+  4-1-ci-workflow-polish: done
   4-2-publish-workflow-via-trusted-publishing: backlog
   4-3a-github-actions-marketplace-wrapper: backlog
   4-3b-gitlab-ci-catalog-component: backlog

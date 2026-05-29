@@ -1,6 +1,6 @@
 # Story 4.1: CI workflow polish — `pip-audit`, codecov upload, LOC gate, quarterly dependency-update cron
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -419,6 +419,34 @@ env:
     - "`setup-uv` `cache-dependency-glob: '**/pyproject.toml'` misaligned" — **PARTIALLY CLOSED** by AC1 (new `pip-audit` job uses `**/uv.lock`); the existing `lint` and `pytest` jobs retain the `**/pyproject.toml` glob to honor AC13 byte-identical preservation. Re-flag for follow-up.
 
 > **Note**: Task 9 (deferred-work updates) is gated on code-review per its own header ("Post-review"); intentionally left unchecked until code-review lands.
+
+### Review Findings
+
+_From `bmad-code-review` on 2026-05-29 against commit `ce2b3ec`. Triaged 24 findings → **5 decision-needed, 6 patch, 8 defer, 5 dismissed**._
+
+- [x] [Review][Decision] Dependency-update PR opens with `GITHUB_TOKEN`, which by GitHub policy does NOT trigger `ci.yml` — quarterly PR lands with zero CI signal (no pytest, no pip-audit, no LOC gate). Blind+Edge both flagged as HIGH severity NFR26 gap. Decide: (a) add a follow-up step `gh workflow run ci.yml --ref <branch>` to re-trigger CI using the same token, (b) introduce a PAT/GitHub App token via secret (operational overhead), or (c) document and defer to a future trust-surface story.
+- [x] [Review][Decision] `pip-audit` with `inputs: .` resolves and scans `pyproject.toml`, **not** `uv.lock`. Since `pyproject.toml` has zero version bounds, the audit re-resolves to whatever PyPI returns today — CI can pass while the shipped `uv.lock` ships a vulnerable pinned version. Decide: (a) prepend `uv export --format requirements-txt > requirements-audit.txt` then `inputs: requirements-audit.txt` (audits the actually-shipped lock), or (b) accept the gap and document it as a known NFR12 limitation pending a `pyproject.toml` bounds story.
+- [x] [Review][Decision] All actions pinned by floating major tag, including `peter-evans/create-pull-request@v6` in the `contents: write + pull-requests: write` workflow. Classic supply-chain footgun: tag retargeting yields code execution with write scope. Decide: (a) SHA-pin only the privileged `dependency-update.yml` actions (recommended — narrow blast radius, low maintenance), (b) SHA-pin all actions across both workflows (broader, more maintenance), or (c) accept current tag pinning per architecture's policy and document the risk.
+- [x] [Review][Decision] Codecov fork-safe `if:` guard short-circuits `true` for any non-PR event (`schedule`, `workflow_dispatch`, `merge_group`, hypothetical `pull_request_target`), exposing `CODECOV_TOKEN` to those event contexts. Decide: (a) tighten to an explicit allowlist `github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)`, or (b) accept — `ci.yml` today only triggers on `push`/`pull_request`, so the surface is theoretical.
+- [x] [Review][Decision] LOC gate awk pipeline counts docstring bodies as code. Edge Case Hunter measured: stripping docstrings drops the count from 1541 → ~1486–1490, putting the repo UNDER NFR21's 1500 soft target. OQ7 may be a measurement artifact, not a real overrun. Decide: (a) tighten the awk to skip docstring bodies (OQ7 disappears; aligns with "non-blank non-comment SLOC" semantics), (b) accept current "physical SLOC including docstrings" semantics and amend NFR21 wording (OQ7 stays), or (c) swap to `cloc`/`scc` for a defensible number.
+
+- [x] [Review][Patch] AC9 missing `pull-request-number` step-summary capture [.github/workflows/dependency-update.yml:49-67] — AC9 explicit clause says "the action's `pull-request-number` output is captured to the step summary as the final line." Impl: `peter-evans/create-pull-request@v6` step has no `id:` set, so its output is unreachable. Fix: add `id: create_pr`, then a follow-up step that echoes `${{ steps.create_pr.outputs.pull-request-number }}` to `$GITHUB_STEP_SUMMARY` when `MODE == 'upgrade'`.
+- [x] [Review][Patch] Daily safety-check has unreachable `uv lock --check` branch [.github/workflows/dependency-update.yml:36-40] — `uv sync --frozen` fails hard with non-zero exit on lock drift, aborting the step BEFORE `uv lock --check` runs. The `if ! uv lock --check; then ::warning::; exit 0; fi` wrapper is unreachable in the drift case it's meant to catch. Fix: drop `uv sync --frozen` and run only `uv lock --check`, OR wrap both in the warning-only pattern.
+- [x] [Review][Patch] `labels: dependencies,automated` silently dropped when labels don't pre-exist and permissions lack `issues: write` [.github/workflows/dependency-update.yml:66] — `peter-evans/create-pull-request@v6` calls `POST /issues/{n}/labels`; missing labels are auto-created only with `issues: write`. Workflow grants only `pull-requests: write`. Fix: add `issues: write` to top-level permissions (one-line change).
+- [x] [Review][Patch] `peter-evans/create-pull-request@v6` auto-stages whatever the upgrade step touched; if `uv lock --upgrade` produces sibling drift (e.g., `.python-version`, embedded cache files), those quietly land in the PR [.github/workflows/dependency-update.yml:49-67]. Fix: pass `add-paths: uv.lock` to scope staging to the file we actually intend to bump.
+- [x] [Review][Patch] `MODE` env routes to `safety-check` for any unexpected event type (`repository_dispatch`, `workflow_call`, re-run, etc.) instead of failing loud [.github/workflows/dependency-update.yml:23]. Fix: rewrite as explicit allowlist; route `schedule == '0 9 1 */3 *'` → upgrade, `schedule == '0 9 * * *'` → safety-check, `workflow_dispatch` → upgrade, anything else → step that fails with a clear error.
+- [x] [Review][Patch] OQ7 logged only in Completion Notes, not in canonical Open Questions section [_bmad/4-1-ci-workflow-polish.md] — Open Questions section still numbers OQ1–OQ6. Move OQ7 (LOC overrun) into the section so future readers see it where they expect. Subsumed if Decision 5 is taken (LOC gate retightened → OQ7 disappears).
+
+- [x] [Review][Defer] `uv lock --upgrade` has no upper-bound guardrails — `pyproject.toml` declares all production deps unbounded, so quarterly upgrade can silently jump major versions [pyproject.toml + dependency-update.yml] — deferred, architectural (caret-bound discussion belongs in a dependency-bounds story).
+- [x] [Review][Defer] Concurrency group does not dedupe stale upgrade PRs across quarters — if a prior PR is unmerged, the next quarter opens a second PR — deferred, future polish.
+- [x] [Review][Defer] Daily safety check costs Actions minutes if repo is private / privately forked [.github/workflows/dependency-update.yml:6] — deferred, document the public-repo assumption.
+- [x] [Review][Defer] `cancel-in-progress: false` queues `workflow_dispatch` behind in-flight daily run — deferred, document or split concurrency by MODE.
+- [x] [Review][Defer] `find semvertag` walks `semvertag/__pycache__/` (none today but fragile to future build-artifact leakage) [.github/workflows/ci.yml:34] — deferred, defensive-only.
+- [x] [Review][Defer] No `defaults: run: shell: bash` declared on workflow files — ubuntu-latest defaults to bash, but pinning removes a future-runner-image foot-gun — deferred, defensive-only.
+- [x] [Review][Defer] Codecov v5 prefers `with: token:` over `env: CODECOV_TOKEN` — both work; minor convention drift — deferred.
+- [x] [Review][Defer] `<org>` placeholder in README badges renders broken — Story 4.7 owns pre-launch resolution per Story 1.1 deferred-work convention — deferred.
+
+_Dismissed (5): `> 1500` vs `>= 1500` boundary (verified spec correct); commit-message wording divergence on fork-safe guard expression (commit already shipped; cannot amend without rewriting history); Task 9 deferred-work updates (intentionally gated post-review per spec); `wc -l` undercounts files without trailing newline (low impact, off by ≤1 per file at most); actionlint not run in CI (Constraint 12 explicitly defers to a future story)._
 
 ## Dev Notes
 
