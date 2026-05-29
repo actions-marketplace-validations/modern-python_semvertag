@@ -57,7 +57,7 @@ development_status:
   # Epic 2: Conventional Commits Strategy & Per-Repo Switching
   epic-2: done
   2-1-conventional-commits-strategy-and-per-repo-switching: done
-  epic-2-retrospective: optional
+  epic-2-retrospective: done
 
   # Epic 3: Pre-flight Diagnostics (semvertag doctor)
   epic-3: in-progress
