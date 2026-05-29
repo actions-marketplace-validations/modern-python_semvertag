@@ -29,4 +29,4 @@ test-cc-strategies:
     uv run --no-sync pytest -o "addopts=" --cov=semvertag.strategies.conventional_commits --cov-branch --cov-fail-under=100 --cov-report=term-missing tests/unit/test_conventional_commits_strategy.py
 
 test-doctor:
-    uv run --no-sync pytest -o "addopts=" --cov=semvertag.doctor --cov-branch --cov-fail-under=100 --cov-report=term-missing tests/unit/test_doctor_checks.py
+    uv run --no-sync pytest -o "addopts=" --cov=semvertag.doctor --cov-branch --cov-fail-under=100 --cov-report=term-missing tests/unit/test_doctor_checks.py tests/unit/test_doctor_render.py

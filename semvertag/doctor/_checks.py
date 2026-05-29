@@ -13,7 +13,8 @@ _CHAIN_METHODS: typing.Final = (
 )
 _SKIPPED_CAUSE_TEMPLATE: typing.Final = "Skipped: blocked by {name} check."
 
-# Cause fragments shadow GitLabProvider's cause vocabulary (`providers/gitlab.py`); update in lockstep when wording changes there. See story 3-1.
+# Cause fragments shadow GitLabProvider's cause vocabulary (`providers/gitlab.py`); update in
+# lockstep when wording changes there. See story 3-1.
 _AUTH_CAUSE_FRAGMENTS: typing.Final = (
     "Token rejected",
     "Token blocked",

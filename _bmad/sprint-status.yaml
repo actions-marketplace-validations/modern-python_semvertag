@@ -1,5 +1,5 @@
 # generated: 2026-05-26
-# last_updated: 2026-05-29 (Story 3.1 code-reviewed — done; 1 patch applied, 6 deferred; 389 tests pass, doctor 100% branch)
+# last_updated: 2026-05-29 (Story 3.2 code-review complete — done; 11 patches applied, 425 tests pass, doctor 100% branch, all gates green)
 # project: semvertag
 # project_key: NOKEY
 # tracking_system: file-system
@@ -37,7 +37,7 @@
 generated: 2026-05-26
 last_updated: 2026-05-29
 project: semvertag
-last_updated_note: "Story 3.1 implemented and code-reviewed (done). 33 new tests (389 total); doctor/_checks.py 100% line+branch via new just test-doctor recipe. run_checks chain (token→scopes→project_access→protected_tags) with skip-on-failure cause; resolve_exit_code with 3>4>2>1 dominance via _DOMINANCE; cause-fragment translation shadows GitLabProvider vocabulary (1-line ownership comment landed via code-review patch). 6 items deferred. Next: Story 3.2 (Typer subcommand + JSON form)."
+last_updated_note: "Story 3.2 code-review complete; status flipped review → done. 11 patches applied (4 from decision-needed + 7 direct): (1) help-text docstring restored to spec Task 2.2 verbatim wording; (2) post-overlay output = _build_output_for_flags(quiet=settings.quiet, json_flag=...) rebuild added to honor SEMVERTAG_QUIET; (3) _redact_token tightened to <= _TOKEN_SUFFIX_LEN → '***' so 4-char secrets aren't fully disclosed; (4) _format_setting_value redaction trigger expanded to path-OR-type ('.token' suffix OR pydantic.SecretStr) per AC2 wording + defense; (5) non-token str config values now run through _redact.redact() defense-in-depth (covers e.g. ?private_token= embedded in gitlab.endpoint); (6) pydantic.ValidationError from apply_cli_overlay now caught separately and routed through _config_error_from_validation for formatted error rather than raw pydantic dump; (7) AC7 token-passed + scopes-failed cause strings pinned byte-exact; (8) AC8 all-five-key configuration assertion added to all-pass JSON test; (9) _assert_no_post_to_tags added to all 4 missing integration tests; (10) new AC11 stderr-redaction integration test forces an ImportError carrying a glpat token-pattern in the message and asserts stderr is redacted; (11) JSON compact-separator unit test rewritten to assert structural separators via re-encode round-trip (no longer false-positive on causes containing ': '). All gates green: lint-ci, test (425 passed, 93% global line), test-branch-strategies (100% branch), test-cc-strategies (100% branch), test-doctor (100% line+branch on semvertag/doctor incl. _render.py), ty check, uv build. 6 deferred items captured in deferred-work.md. Epic 3 complete; next: 4-1-ci-workflow-polish (backlog)."
 project_key: NOKEY
 tracking_system: file-system
 story_location: /Users/kevinsmith/src/pypi/autosemver/_bmad
@@ -62,7 +62,7 @@ development_status:
   # Epic 3: Pre-flight Diagnostics (semvertag doctor)
   epic-3: in-progress
   3-1-doctor-chain-runner-and-exit-code-dominance: done
-  3-2-doctor-typer-subcommand-and-json-form: backlog
+  3-2-doctor-typer-subcommand-and-json-form: done
   epic-3-retrospective: optional
 
   # Epic 4: Public-Launch Readiness - Trust Surface, Distribution & Shadow-Mode
