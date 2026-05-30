@@ -1,0 +1,144 @@
+name: publish
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Effective tag for the version-guard check (e.g. v1.0.0). Used in lieu of github.event.release.tag_name."
+        required: true
+        type: string
+
+permissions:
+  id-token: write   # PyPI OIDC token issuance — REQUIRED for trusted publishing
+  contents: read    # actions/checkout
+
+concurrency:
+  # Include event_name so a release-published run and a workflow_dispatch
+  # retry for the same tag occupy separate groups — otherwise the recovery
+  # dispatch queues behind the broken release run with cancel-in-progress:
+  # false. Without event_name, an unexpected future trigger could also
+  # collapse onto an empty group key.
+  group: publish-${{ github.event_name }}-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  # Actions in this workflow are SHA-pinned (not tag-pinned) because this job
+  # carries id-token: write — the OIDC token exchanged with PyPI confers PyPI
+  # write scope on this repo. Tag retargeting would yield code execution with
+  # publishing privileges; blast radius is asymmetric vs. ci.yml's read-only
+  # context. ci.yml stays on tag pins per architecture policy. SHAs MUST match
+  # dependency-update.yml's vetted set so a reviewer can verify with one grep.
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Force build/publish dep resolution onto PyPI's canonical index even if
+      # pyproject.toml ever adds a [[tool.uv.index]]. The runner holds
+      # id-token: write, so dep resolution stays on the trusted index.
+      UV_INDEX_URL: https://pypi.org/simple/
+    environment:
+      name: pypi
+      url: https://pypi.org/project/semvertag/
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          # On workflow_dispatch, check out the dispatched tag — not the
+          # branch the workflow was dispatched from. Keeps the guard reading
+          # [project.version] from the tagged commit, matching release:
+          # published's default checkout ref.
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - uses: extractions/setup-just@dd310ad5a97d8e7b41793f8ef055398d51ad4de6  # v2
+      - uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39  # v3
+        with:
+          # Pin uv so the default behavior of `uv build` / `uv publish`
+          # (trusted-publishing auto-detect, dist dir, attestation upload)
+          # is locked against silent uv-version drift. Pinned to the latest
+          # stable at 2026-05-30; bump in lockstep with the dependency-update
+          # workflow's lockfile cadence.
+          version: "0.11.17"
+          enable-cache: true
+          cache-dependency-glob: "**/uv.lock"
+      - run: uv python install 3.13
+
+      - name: Verify release commit is on main
+        if: github.event_name == 'release'
+        run: |
+          # Releases must be cut from main. github.event.release.target_commitish
+          # is the branch (or SHA) the release was created against. Asserting
+          # it equals 'main' prevents publishing from a side branch or a
+          # recreated tag pointing at a foreign commit. workflow_dispatch
+          # skips this check; the dispatched tag's ref is already controlled
+          # by the maintainer triggering the run.
+          if [ "${{ github.event.release.target_commitish }}" != "main" ]; then
+            echo "::error::Release target_commitish (${{ github.event.release.target_commitish }}) is not 'main'. Releases must be cut from main."
+            exit 1
+          fi
+
+      - id: tag_guard
+        name: Verify release tag matches [project.version]
+        run: |
+          # Resolve effective tag from the triggering event.
+          if [ "${{ github.event_name }}" = "release" ]; then
+            EFFECTIVE_TAG="${{ github.event.release.tag_name }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            EFFECTIVE_TAG="${{ inputs.tag }}"
+          else
+            echo "::error::Unexpected event_name ${{ github.event_name }} — publish.yml expects 'release' or 'workflow_dispatch'."
+            exit 1
+          fi
+
+          # Strip a single leading 'v' (the SemVer-style 'v1.0.0' tag prefix).
+          EFFECTIVE_TAG="${EFFECTIVE_TAG#v}"
+
+          # Re-assert strict SemVer 2.0 form post-strip. The MAJOR/MINOR/PATCH
+          # groups enforce SemVer §2 no-leading-zero rule. The pre-release
+          # group enforces SemVer §9: dot-separated identifiers must be either
+          # a non-leading-zero numeric or an alphanumeric containing at least
+          # one non-digit. The build-metadata group enforces SemVer §10:
+          # dot-separated identifiers of [0-9A-Za-z-]+. A loose [0-9A-Za-z.-]+
+          # would accept '1.0.0-01' (leading-zero numeric) and '1.0.0-..foo'
+          # (empty identifiers), both forbidden by the spec.
+          if ! echo "$EFFECTIVE_TAG" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9A-Za-z-]*))*))?(\+([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?$'; then
+            echo "::error::Effective tag '${EFFECTIVE_TAG}' is not strict SemVer 2.0 (expected MAJOR.MINOR.PATCH with optional dot-separated -prerelease and +build identifiers; no leading zeros in numeric identifiers; no empty identifiers)."
+            exit 1
+          fi
+
+          # Read [project.version] from pyproject.toml (stdlib-only; tomllib is
+          # stdlib on Python >= 3.11 and the setup-uv step above installs 3.13).
+          # --no-project skips reading the project's pyproject.toml as a uv project
+          # (avoids resolving + syncing dependencies just to read the version).
+          PROJECT_VERSION=$(uv run --no-project python -c \
+            "import tomllib, pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
+
+          if [ "$EFFECTIVE_TAG" != "$PROJECT_VERSION" ]; then
+            echo "::error::Release tag (${EFFECTIVE_TAG}) does not match pyproject.toml [project.version] (${PROJECT_VERSION}). Refusing to publish. Bump [project.version] in pyproject.toml and tag matching, or amend the release tag."
+            exit 1
+          fi
+          echo "::notice::tag ${EFFECTIVE_TAG} matches [project.version] ${PROJECT_VERSION} — proceeding to build + publish."
+          echo "effective_tag=${EFFECTIVE_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Build distribution
+        if: success()
+        run: uv build --out-dir dist
+
+      - name: Upload built distributions
+        if: success()
+        # SHA pin: actions/upload-artifact@v4 (lightweight tag → commit
+        # ea165f8d… resolved via `gh api repos/actions/upload-artifact/git/refs/tags/v4`
+        # on 2026-05-30). Note: v7 is the currently-published major series
+        # — v4 retained here to match the conservative pin cadence of the
+        # other actions in this workflow. Bump in a follow-up if/when the
+        # architecture's pinning policy is widened.
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
+        with:
+          name: dist-${{ steps.tag_guard.outputs.effective_tag }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish to PyPI via trusted publishing
+        if: success()
+        run: uv publish dist/*

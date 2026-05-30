@@ -1,5 +1,5 @@
 # generated: 2026-05-26
-# last_updated: 2026-05-29 (Story 4.1 code-review complete — Status: done; 10 patches applied across ci.yml + dependency-update.yml)
+# last_updated: 2026-05-30 (Story 4.2 done — code-review applied + 4 pre-merge action items closed; actions/upload-artifact pinned @ea165f8d…v4; uv version bumped to 0.11.17; all gates green)
 # project: semvertag
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,9 +35,9 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-26
-last_updated: 2026-05-29
+last_updated: 2026-05-30
 project: semvertag
-last_updated_note: "Story 4.1 code-review complete — Status: done. 10 patches applied (5 from decision-needed + 5 direct): (1) gh workflow run ci.yml --ref re-trigger step added so the quarterly dependency-update PR gets CI signal (closes NFR26 gap the impl otherwise had); (2) uv export --format requirements-txt --frozen --no-hashes step prepended to pip-audit so the audit scans the actually-shipped uv.lock pins, not pyproject's unbounded specifiers (closes NFR12 gap); (3) SHA-pinned all 4 actions in dependency-update.yml (write-scope workflow): actions/checkout@34e1148, extractions/setup-just@dd310ad, astral-sh/setup-uv@caf0cab, peter-evans/create-pull-request@c5a7806 (ci.yml stays on tag pins per architecture policy); (4) codecov fork-safe guard tightened to explicit allowlist event_name == 'push' || (pull_request && head.repo.full_name == github.repository); (5) LOC awk tightened to skip docstring bodies — count 1541 → 1535 (still 35 over the 1500 soft target; OQ7 stays); (6) id: create_pr + pull-request-number step-summary capture (AC9); (7) unreachable uv sync --frozen dropped from daily safety-check, kept only uv lock --check wrapped warning-only; (8) issues: write + actions: write permissions added for label auto-create and gh workflow run re-trigger; (9) add-paths: uv.lock added to peter-evans to scope staging; (10) MODE routing rewritten as explicit Route step that fails loud on unexpected event/schedule. Gates green: lint-ci, 425 tests, branch/cc/doctor 100% branch, ty, uv build, both workflow YAMLs parse via yaml.safe_load. AC11 byte-exact preserved (git diff HEAD -- semvertag/ tests/ pyproject.toml Justfile empty). 8 deferred items captured in deferred-work.md. Epic 4 next: 4-2-publish-workflow-via-trusted-publishing (backlog)."
+last_updated_note: "Story 4.2 code-review applied — Status: review → in-progress. 6 decision-needed resolved (4 → patches, 2 → dismissed accepted-risk). 14 patches landed: (a) concurrency group includes event_name (release+dispatch no longer collide); (b) actions/checkout `with.ref` so workflow_dispatch checks out the dispatched tag, not main HEAD; (c) `setup-uv with.version: \"0.5.31\"` (TODO: verify against current stable); (d) job-level `env.UV_INDEX_URL: https://pypi.org/simple/`; (e) new `Verify release commit is on main` guard step on release events; (f) tightened SemVer regex per §9/§10 (rejects `1.0.0-01` / `1.0.0-.alpha`); (g) `if: success()` on Build/Upload/Publish steps; (h) `uv build --out-dir dist` + `uv publish dist/*`; (i) new `actions/upload-artifact@v4` step (TODO: SHA-pin before merge, add SHA to AC7 grep canary); (j) runbook AC8 header swap to spec-literal `## Cutting a release (≤5 minutes, target NFR13 + 5-min-from-merge-to-PyPI)`; (k) runbook adds `> Note:` to replace `<org>` with real owner before first release; (l) runbook re-frames `1.0.0-rc.1` / `1.0.0+build.123` as guard-pass-but-PyPI-reject; (m) runbook adds partial-upload PyPI 400 troubleshooting bullet; (n) runbook adds post-release `[project.version]` policy + required-reviewer SLO caveat + CHANGELOG.md→GitHub-release-body until Story 4.6. 5 items deferred to `_bmad/deferred-work.md §4-2`. Gates green post-patch: `yaml.safe_load` clean, `just lint-ci` clean, `mkdocs build --strict` clean (0.20s). Strict-SemVer regex smoke (17 cases) all PASS. Status: in-progress until pre-merge action items land (SHA-pin upload-artifact, verify uv version, re-run AC7 canary). 2 OQs (OQ11 regex, OQ12 dispatch tag) settled by patches (g) and (b). All 4 pre-merge action items closed 2026-05-30: actions/upload-artifact pinned to ea165f8d65b6e75b540449e92b4886f43607fa02 (v4); setup-uv version bumped from placeholder 0.5.31 to current stable 0.11.17; AC7 credential canary re-run clean; gates re-run clean (yaml.safe_load, just lint-ci, mkdocs build --strict 0.20s, just test 425/425 in 1.51s). Status: review → in-progress → done. Epic 4 next: 4-3a-github-actions-marketplace-wrapper (backlog)."
 project_key: NOKEY
 tracking_system: file-system
 story_location: /Users/kevinsmith/src/pypi/autosemver/_bmad
@@ -68,7 +68,7 @@ development_status:
   # Epic 4: Public-Launch Readiness - Trust Surface, Distribution & Shadow-Mode
   epic-4: in-progress
   4-1-ci-workflow-polish: done
-  4-2-publish-workflow-via-trusted-publishing: backlog
+  4-2-publish-workflow-via-trusted-publishing: done
   4-3a-github-actions-marketplace-wrapper: backlog
   4-3b-gitlab-ci-catalog-component: backlog
   4-4-mkdocs-site-content: backlog

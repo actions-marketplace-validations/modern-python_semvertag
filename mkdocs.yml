@@ -4,6 +4,8 @@ docs_dir: docs
 edit_uri: edit/main/docs/
 nav:
   - Quick Start: index.md
+  - Contributing:
+    - Release runbook: contributing/release.md
 
 theme:
   name: material
