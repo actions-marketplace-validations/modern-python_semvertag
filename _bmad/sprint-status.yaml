@@ -60,10 +60,10 @@ development_status:
   epic-2-retrospective: done
 
   # Epic 3: Pre-flight Diagnostics (semvertag doctor)
-  epic-3: in-progress
+  epic-3: done
   3-1-doctor-chain-runner-and-exit-code-dominance: done
   3-2-doctor-typer-subcommand-and-json-form: done
-  epic-3-retrospective: optional
+  epic-3-retrospective: done
 
   # Epic 4: Public-Launch Readiness - Trust Surface, Distribution & Shadow-Mode
   epic-4: in-progress
