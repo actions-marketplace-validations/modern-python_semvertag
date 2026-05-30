@@ -1,0 +1,147 @@
+# GitLab CI
+
+Use semvertag in GitLab CI via the published CI Catalog component. The
+component is a thin GitLab CI job template around the `semvertag` CLI —
+it pulls a lightweight Python image, installs `uv`, then runs
+`uvx semvertag`. No PyPI install in your repo, no maintained pipeline
+YAML beyond the snippet below.
+
+## Quick Start
+
+The minimum useful pipeline: auto-tag on every push to the default
+branch. The component itself contributes a single `semvertag` job; the
+consumer attaches it to a stage and constrains it to the default
+branch via `rules:`.
+
+> **Required setup.** Set `SEMVERTAG_TOKEN` as a project-level masked
+> CI/CD variable holding a Project Access Token (or Personal Access
+> Token) with `api` + `write_repository` scope. `CI_JOB_TOKEN` works
+> on projects where the job-token write scope is opted in
+> (see *Token scope* below).
+
+```yaml
+include:
+  - component: $CI_SERVER_FQDN/<org>/semvertag/semvertag@v1
+    inputs:
+      strategy: branch-prefix
+
+stages: [tag]
+
+semvertag:
+  stage: tag
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+```
+
+> Replace `<org>` with the actual GitLab namespace (group or user) that
+> owns the published Catalog component. The literal string `<org>`
+> does not resolve and the pipeline fails at `include:` time.
+
+The component runs against the latest commit on the default branch and,
+if a bump is warranted by the configured strategy, pushes a new tag to
+the project's `origin`. If no bump is warranted, the job exits 0
+without pushing.
+
+## Inputs
+
+The component accepts one input. Its default matches what most
+consumers want; you can omit the `inputs:` block entirely.
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `strategy` | no | `branch-prefix` | Bump strategy. One of `branch-prefix` or `conventional-commits`. |
+
+The input names, defaults, and options are sourced from
+[`templates/semvertag.yml`](https://github.com/<org>/semvertag/blob/main/templates/semvertag.yml) —
+if this table ever drifts from the descriptor, the descriptor wins.
+
+## Required permissions
+
+The component pushes a tag, so the token it uses MUST carry write
+access to the repository. semvertag reads the token from these env
+vars in order: `SEMVERTAG_GITLAB__TOKEN`, `SEMVERTAG_TOKEN`,
+`CI_JOB_TOKEN`, `GITLAB_TOKEN`. The first set value wins.
+
+Run `uvx semvertag doctor` locally (or as a CI pre-flight) to confirm
+the token scope is correct. The diagnostic reports the GitLab API's
+response to a scope-probe call and names which scopes are missing.
+
+## Token scope: `CI_JOB_TOKEN` vs Project Access Tokens
+
+Two cases govern which token the component should use:
+
+- **GitLab projects where the maintainer has opted in to job-token
+  write scope** (Settings → CI/CD → Token Permissions → *Allow access
+  from the project's token to write to the repository*). `CI_JOB_TOKEN`
+  is auto-exported into every CI job and gets picked up by the alias
+  chain — no further configuration needed.
+- **Projects that have NOT opted in**, or projects on older GitLab
+  versions where `CI_JOB_TOKEN` was scoped read-only by default. The
+  consumer creates a Project Access Token (preferred; scoped to the
+  one project) or a Personal Access Token (works but bleeds the
+  user's scope across all their projects). Token scopes required:
+  `api` + `write_repository`. Store the token as a masked CI/CD
+  variable named `SEMVERTAG_TOKEN`; the alias chain picks it up
+  ahead of `CI_JOB_TOKEN`.
+
+**Self-hosted GitLab**: set `SEMVERTAG_GITLAB__ENDPOINT` (note the
+double underscore) as a project CI/CD variable pointing to the
+instance's API root, e.g. `https://gitlab.example.com`. The default
+is `https://gitlab.com` and is not auto-derived from `CI_SERVER_FQDN`.
+
+For most consumers on `gitlab.com`-hosted projects with job-token
+write scope, the minimal include snippet above is the entire setup.
+
+## Branch-prefix vs conventional-commits
+
+Pick `branch-prefix` if your team merges merge requests with branch
+names that follow a `fix/...`, `feat/...`, `chore/...` convention. The
+component reads the most recent merge commit's source-branch prefix
+and bumps accordingly — `fix/` bumps patch, `feat/` bumps minor,
+`chore/` bumps nothing. This is the default. A dedicated per-strategy
+explainer page ships in a later docs story.
+
+Pick `conventional-commits` if your team writes
+[Conventional Commits](https://www.conventionalcommits.org/) messages
+directly on the default branch (e.g. `feat: add X`, `fix: handle Y`,
+`feat!: drop Z`). The component scans commits since the last tag and
+chooses the highest bump implied by their type prefixes (`feat!` or
+`BREAKING CHANGE:` → major, `feat:` → minor, `fix:` → patch,
+everything else → none).
+
+Set the strategy per project:
+
+```yaml
+include:
+  - component: $CI_SERVER_FQDN/<org>/semvertag/semvertag@v1
+    inputs:
+      strategy: conventional-commits
+```
+
+## Troubleshooting
+
+- **`Token missing scope or insufficient permission: 403`** — the
+  token does not have `api` + `write_repository` scope, or the
+  project's protected-tag rules disallow the bot from creating tags.
+  Verify the `SEMVERTAG_TOKEN` scopes in GitLab UI (Settings → Access
+  Tokens), or run `uvx semvertag doctor` locally for a named
+  diagnosis.
+
+- **`Project id missing. Set CI_PROJECT_ID or pass --project-id.`** —
+  the CI runner did not export `CI_PROJECT_ID` (the variable is
+  exported by every standard GitLab CI job; a custom executor that
+  strips CI variables would suppress it). Set `SEMVERTAG_PROJECT_ID`
+  as a project-level CI/CD variable as the override.
+
+- **Self-hosted GitLab, but the component connects to `gitlab.com`**
+  — the default endpoint is `https://gitlab.com` and is not
+  auto-derived from `CI_SERVER_FQDN`. Set
+  `SEMVERTAG_GITLAB__ENDPOINT` as a project-level CI/CD variable
+  pointing to the instance's API root.
+
+- **`include: - component: $CI_SERVER_FQDN/<org>/semvertag/semvertag@v1` fails to resolve**
+  — `<org>` is a literal placeholder in this documentation. Replace
+  it with the actual GitLab namespace (group or user) that owns the
+  published Catalog component. The Catalog listing's `include:` line
+  will show the resolved namespace once the first release is
+  published.

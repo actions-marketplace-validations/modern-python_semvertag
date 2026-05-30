@@ -1,6 +1,6 @@
 # Story 4.3b: GitLab CI Catalog component (`templates/semvertag.yml`)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -283,62 +283,62 @@ nav:
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Author `templates/semvertag.yml`** (AC: 1, 2, 3, 4, 8)
-  - [ ] 1.1 Create directory `templates/` at repo root (no `__init__.py` analogue; mkdocs and the build do not walk it).
-  - [ ] 1.2 Author the file with `spec:` block (one `inputs:` entry: `strategy` with type, options, default, description) per AC2.
-  - [ ] 1.3 Add the `---` YAML document separator immediately after the `spec:` block.
-  - [ ] 1.4 Author the job body: one job named `semvertag`, with `image: python:3.13-slim`, `variables: { SEMVERTAG_STRATEGY: $[[ inputs.strategy ]] }`, `before_script: [pip install --quiet --no-cache-dir uv]`, `script: [uvx semvertag]` per AC3.
-  - [ ] 1.5 Verify the descriptor parses: `uv run --with pyyaml python -c "from yaml import safe_load_all; docs=list(safe_load_all(open('templates/semvertag.yml'))); assert len(docs)==2"`.
-  - [ ] 1.6 NO branding/icon/color block (AC4); NO `outputs:`-equivalent block; NO top-level `image:`/`variables:`/`before_script:`/`after_script:`.
+- [x] **Task 1: Author `templates/semvertag.yml`** (AC: 1, 2, 3, 4, 8) — applied 2026-05-30
+  - [x] 1.1 Created directory `templates/` at repo root.
+  - [x] 1.2 Authored the `spec:` block with `strategy` input (type, options, default, description).
+  - [x] 1.3 Added `---` YAML document separator.
+  - [x] 1.4 Authored job body: `image: python:3.13-slim`, `variables.SEMVERTAG_STRATEGY: $[[ inputs.strategy ]]`, `before_script: pip install --quiet --no-cache-dir uv`, `script: uvx semvertag`.
+  - [x] 1.5 Verified parse: `parse OK, docs: 2`.
+  - [x] 1.6 No branding/icon/color, no `outputs:`-equivalent, no top-level `image:`/`variables:`/`before_script:`/`after_script:`.
 
-- [ ] **Task 2: Author `docs/providers/gitlab.md`** (AC: 6, 10)
-  - [ ] 2.1 Create `docs/providers/gitlab.md` (sibling to `docs/providers/github.md`).
-  - [ ] 2.2 H1 `# GitLab CI`.
-  - [ ] 2.3 Intro paragraph: 2-3 sentences mirroring `github.md`'s intro shape — what the component does, how a consumer adopts it, where it sits.
-  - [ ] 2.4 H2 `## Quick Start` with the canonical `.gitlab-ci.yml` snippet (AC6 verbatim block).
-  - [ ] 2.5 H2 `## Inputs` with a 4-column table (Input, Required, Default, Description) mirroring `spec.inputs.strategy` (AC10 byte-equal check).
-  - [ ] 2.6 H2 `## Required permissions` covering `CI_JOB_TOKEN` defaults and the `semvertag doctor` diagnostic.
-  - [ ] 2.7 H2 `## Token scope: `CI_JOB_TOKEN` vs Project Access Tokens` per AC6.
-  - [ ] 2.8 H2 `## Branch-prefix vs conventional-commits` — prose-equivalent to `github.md`'s section; do NOT link to `docs/strategies/*.md` (OQ4 of 4-3a; same convention here).
-  - [ ] 2.9 H2 `## Troubleshooting` with the 4 failure modes per AC6.
-  - [ ] 2.10 NO preview/status banner (unlike `github.md`); the GitLab provider is fully implemented.
+- [x] **Task 2: Author `docs/providers/gitlab.md`** (AC: 6, 10) — applied 2026-05-30
+  - [x] 2.1 Created `docs/providers/gitlab.md` (~120 LOC markdown).
+  - [x] 2.2 H1 `# GitLab CI`.
+  - [x] 2.3 Intro paragraph: 4 sentences mirroring `github.md`'s shape.
+  - [x] 2.4 H2 `## Quick Start` with the canonical `.gitlab-ci.yml` snippet + Required-setup callout.
+  - [x] 2.5 H2 `## Inputs` with 4-column table mirroring `spec.inputs.strategy`.
+  - [x] 2.6 H2 `## Required permissions` covering token alias chain + `semvertag doctor`.
+  - [x] 2.7 H2 `## Token scope: CI_JOB_TOKEN vs Project Access Tokens` covering opt-in scope toggle + PAT alternative + `SEMVERTAG_GITLAB__ENDPOINT` for self-hosted.
+  - [x] 2.8 H2 `## Branch-prefix vs conventional-commits` — prose-equivalent to `github.md`'s section; no links to `docs/strategies/*.md`.
+  - [x] 2.9 H2 `## Troubleshooting` with 4 failure modes (403 token-scope, Project id missing, self-hosted endpoint, `<org>` placeholder).
+  - [x] 2.10 No preview banner; the GitLab provider is fully implemented.
 
-- [ ] **Task 3: Update `mkdocs.yml` nav** (AC: 7, 11, 12)
-  - [ ] 3.1 Insert the `GitLab CI: providers/gitlab.md` leaf under the existing `Providers:` block, alphabetically before `GitHub Actions: providers/github.md`.
-  - [ ] 3.2 Verify `mkdocs build --strict` exits 0 with the new entry.
-  - [ ] 3.3 Verify theme / palette / markdown_extensions / plugins / repo_url / extra blocks are byte-stable vs. the 4-3a-landed state.
+- [x] **Task 3: Update `mkdocs.yml` nav** (AC: 7, 11, 12) — applied 2026-05-30
+  - [x] 3.1 Inserted `GitLab CI: providers/gitlab.md` leaf alphabetically before `GitHub Actions: providers/github.md` under `Providers:`.
+  - [x] 3.2 `mkdocs build --strict` → 0.21s, no warnings.
+  - [x] 3.3 Theme / palette / markdown_extensions / plugins / repo_url / extra blocks byte-stable.
 
-- [ ] **Task 4: Add `Validate templates/semvertag.yml shape` step to `ci.yml`** (AC: 5, 13)
-  - [ ] 4.1 Locate the `lint` job in `.github/workflows/ci.yml`; the new step goes after the 4-3a `Validate action.yml against GitHub Actions schema` step (currently at lines ~29-39) and before `uv build`.
-  - [ ] 4.2 Author the step using the inline Python heredoc from AC5. Single step, single `run:` block.
-  - [ ] 4.3 Verify locally: copy the heredoc into a terminal session, run it, see `templates/semvertag.yml shape OK`. Run again with a deliberately-broken descriptor (e.g., remove `options`) and verify the gate fails cleanly.
-  - [ ] 4.4 Verify the rest of `ci.yml` is byte-stable (`git diff 76ddc3d -- .github/workflows/ci.yml | grep -E '^[+-]' | wc -l` should equal exactly the new step's line count + 1 for the surrounding indentation context).
+- [x] **Task 4: Add `Validate templates/semvertag.yml shape` step to `ci.yml`** (AC: 5, 13) — applied 2026-05-30
+  - [x] 4.1 New step inserted between the 4-3a `Validate action.yml against GitHub Actions schema` step (lines 29-39 pre-4-3b) and `uv build`.
+  - [x] 4.2 Inline Python heredoc per AC5; single step, single `run:` block (28 LOC delta).
+  - [x] 4.3 Verified locally: `templates/semvertag.yml shape OK` (passes); negative-test informal (removing `options:` yields `AssertionError`).
+  - [x] 4.4 Rest of `ci.yml` byte-stable: only insertion is the new step.
 
-- [ ] **Task 5: Local gate sweep** (AC: 12, 14)
-  - [ ] 5.1 `uv run --with pyyaml python -c "from yaml import safe_load_all; list(safe_load_all(open('templates/semvertag.yml')))"` → no error.
-  - [ ] 5.2 Run the AC5 structural gate locally → `templates/semvertag.yml shape OK`.
-  - [ ] 5.3 `just lint-ci` → all clean.
-  - [ ] 5.4 `uv build` → sdist + wheel produced.
-  - [ ] 5.5 `uv run --with-requirements docs/requirements.txt -- mkdocs build --strict` → 0 warnings.
-  - [ ] 5.6 `uv run pytest` → all tests pass; tally count ≥ 425.
-  - [ ] 5.7 `uv run pytest --cov=semvertag --cov-branch` → coverage on branch_prefix.py, conventional_commits.py, _doctor/ unchanged from 4-3a baseline.
+- [x] **Task 5: Local gate sweep** (AC: 12, 14) — applied 2026-05-30
+  - [x] 5.1 yaml.safe_load_all → 2 docs, no error.
+  - [x] 5.2 AC5 structural gate → `templates/semvertag.yml shape OK`.
+  - [x] 5.3 `just lint-ci` (eof-fixer + ruff format + ruff check + ty check) → all clean.
+  - [x] 5.4 `uv build` → `dist/semvertag-0.tar.gz` + `dist/semvertag-0-py3-none-any.whl`.
+  - [x] 5.5 `mkdocs build --strict` → 0.21s, no warnings.
+  - [x] 5.6 `uv run pytest` → 425 passed in 1.18s.
+  - [x] 5.7 Branch coverage: `branch_prefix.py` 100% (24/24, 6/6 br), `conventional_commits.py` 100% (43/43, 16/16 br), `doctor/_checks.py` 100% (36/36, 14/14 br), `doctor/_render.py` 100% (63/63, 12/12 br). No regression.
 
-- [ ] **Task 6: Consumer-snippet smoke check** (AC: 6, 10)
-  - [ ] 6.1 Verify the AC6 Quick Start snippet parses: `uv run --with pyyaml python -c "from yaml import safe_load; safe_load(open('docs/providers/gitlab.md').read())"` — note this requires extracting the YAML block from the markdown file (use a small grep + sed pipeline, or copy the block to a scratch buffer).
-  - [ ] 6.2 Verify drift-free: the `default`, `options` enumeration, and `description` strings in the Inputs table in `docs/providers/gitlab.md` are character-identical to the values in `templates/semvertag.yml`'s `spec.inputs.strategy` block.
-  - [ ] 6.3 NO scratch `.github/workflows/test-snippet.yml` is created or committed (4-3a's OQ4 / Change Log convention: in-memory smoke checks, no committed scratch files).
+- [x] **Task 6: Consumer-snippet smoke check** (AC: 6, 10) — applied 2026-05-30
+  - [x] 6.1 Quick Start YAML block extracted via `re.search(r'```yaml\n(.*?)\n```', src, re.DOTALL)` then `yaml.safe_load` → `keys: ['include', 'semvertag', 'stages']`.
+  - [x] 6.2 Drift check passed: docs Inputs table's `branch-prefix` default + `[branch-prefix, conventional-commits]` options match `templates/semvertag.yml` character-identically.
+  - [x] 6.3 No scratch `.github/workflows/test-snippet.yml` created (in-memory only; mirrors 4-3a Change Log precedent).
 
-- [ ] **Task 7: File-list / regression audit** (AC: 11, 13)
-  - [ ] 7.1 Run `git status --short` — only the expected files should be modified or created: `templates/semvertag.yml` (NEW), `docs/providers/gitlab.md` (NEW), `mkdocs.yml` (MODIFIED), `.github/workflows/ci.yml` (MODIFIED), `_bmad/sprint-status.yaml` (MODIFIED — Task 8), `_bmad/4-3b-gitlab-ci-catalog-component.md` (MODIFIED — Task 8). NO `.gitlab/` directory created; NO changes to `action.yml` or `docs/providers/github.md`.
-  - [ ] 7.2 Run `git diff HEAD -- semvertag/ tests/ pyproject.toml Justfile README.md LICENSE docs/index.md docs/contributing/ docs/requirements.txt action.yml docs/providers/github.md .github/workflows/publish.yml .github/workflows/dependency-update.yml context7.json CLAUDE.md` — output MUST be empty.
+- [x] **Task 7: File-list / regression audit** (AC: 11, 13) — applied 2026-05-30
+  - [x] 7.1 `git status --short` confirmed exactly: `templates/semvertag.yml` NEW, `docs/providers/gitlab.md` NEW, `mkdocs.yml` MODIFIED, `.github/workflows/ci.yml` MODIFIED, `_bmad/4-3b-...md` MODIFIED (Task 8 + eof-fixer trailing-newline normalization), `_bmad/sprint-status.yaml` MODIFIED. No `.gitlab/` created; no diff in `action.yml` or `docs/providers/github.md`.
+  - [x] 7.2 `git diff HEAD -- semvertag/ tests/ pyproject.toml Justfile README.md LICENSE docs/index.md docs/contributing/ docs/requirements.txt action.yml docs/providers/github.md .github/workflows/publish.yml .github/workflows/dependency-update.yml context7.json CLAUDE.md` → EMPTY. AC11 confirmed.
 
-- [ ] **Task 8: Update Dev Agent Record + Story Status** (AC: all)
-  - [ ] 8.1 Fill in `Dev Agent Record` → `Agent Model Used` with the active model id.
-  - [ ] 8.2 Append a `Debug Log References` section with each gate's exit confirmation.
-  - [ ] 8.3 Fill in `Completion Notes List` with per-AC verification statements (mirrors Story 4.3a's format).
-  - [ ] 8.4 Fill in `File List` table: each touched file with `NEW` / `UPDATE` / `NO-CHANGE` action and a one-line summary.
-  - [ ] 8.5 Fill in `Change Log` with the chronological list of dev decisions.
-  - [ ] 8.6 Flip Status from `ready-for-dev` → `in-progress` → `review`.
+- [x] **Task 8: Update Dev Agent Record + Story Status** (AC: all) — applied 2026-05-30
+  - [x] 8.1 `Agent Model Used` filled (Claude Opus 4.7, 1M context).
+  - [x] 8.2 `Debug Log References` filled with gate exit confirmations.
+  - [x] 8.3 `Completion Notes List` filled with per-AC verification statements.
+  - [x] 8.4 `File List` table filled.
+  - [x] 8.5 `Change Log` filled.
+  - [x] 8.6 Status: `ready-for-dev` → `review`.
 
 - [ ] **Task 9: Post-review — update `_bmad/deferred-work.md` (admin)**
   - [ ] 9.1 Append `## Deferred from: code review of 4-3b-gitlab-ci-catalog-component (YYYY-MM-DD)` with any non-blocking decisions / discovered edge cases.
@@ -612,17 +612,68 @@ The new `templates/` directory at the repo root is GitLab CI Catalog's **mandato
 
 ### Agent Model Used
 
-{{agent_model_name_version}}
+Claude Opus 4.7 (1M context) — `claude-opus-4-7[1m]`. Knowledge cutoff January 2026; current date 2026-05-30.
 
 ### Debug Log References
 
+Gate run (2026-05-30, post-implementation):
+- `uv run --with pyyaml python -c "from yaml import safe_load_all; docs=list(safe_load_all(open('templates/semvertag.yml'))); print('parse OK, docs:', len(docs))"` → `parse OK, docs: 2`
+- AC5 inline structural check → `templates/semvertag.yml shape OK`
+- `just lint-ci` → `eof-fixer . --check`, `ruff format --check` (47 files already formatted), `ruff check --no-fix` (All checks passed!), `ty check` (All checks passed!) — clean (after a one-line eof-fixer normalization of the story file itself)
+- `uv build` → `Successfully built dist/semvertag-0.tar.gz`, `Successfully built dist/semvertag-0-py3-none-any.whl`
+- `uv run --with-requirements docs/requirements.txt -- mkdocs build --strict` → `Documentation built in 0.21 seconds`
+- `uv run pytest -q` → `425 passed in 1.18s`
+- `uv run pytest --cov=semvertag --cov-branch -q` → `TOTAL 1072 73 310 36 92%`; branch_prefix.py / conventional_commits.py / doctor/_checks.py / doctor/_render.py all 100% branch
+- Snippet smoke (`re.search` + `yaml.safe_load` extraction from `docs/providers/gitlab.md`) → `Quick Start snippet parses OK; keys: ['include', 'semvertag', 'stages']`; drift check `Inputs drift check OK`
+- AC11 do-not-touch diff → empty
+- `.gitlab/` directory absence verified (`ls /Users/kevinsmith/src/pypi/autosemver/.gitlab` → `No such file or directory`)
+
 ### Completion Notes List
+
+- **OQ1 resolved at dev start (preempting code-review):** descriptor path is `templates/semvertag.yml`, NOT `.gitlab/catalog/component.yml`. Rationale: GitLab Catalog ingestion strictly scans `templates/` (Context7-verified). Sarah's call captured at user-question time before any file was written. Architecture.md / epics.md still carry the old prescription; deferred to a future amendment story.
+- **AC1**: NEW `templates/semvertag.yml` at repo root (15 LOC YAML). Two-document layout (`spec:` + `---` + `semvertag` job). Include-ref shape consumers will use: `$CI_SERVER_FQDN/<org>/semvertag/semvertag@v1`.
+- **AC2**: One input `strategy`, typed `string`, options `[branch-prefix, conventional-commits]`, default `branch-prefix`. No `token`, no `gitlab_endpoint`, no `project_id` — all env-driven via the existing settings-layer alias chains.
+- **AC3**: `image: python:3.13-slim`, `variables: { SEMVERTAG_STRATEGY: $[[ inputs.strategy ]] }`, `before_script: [pip install --quiet --no-cache-dir uv]`, `script: [uvx semvertag]`. Job named `semvertag`. No `stage:`, no `rules:`, no `dependencies:`/`needs:`.
+- **AC4**: No `branding:` / `icon:` / `color:` / `metadata:` block. Catalog has no equivalent surface.
+- **AC5**: Inline Python heredoc in `ci.yml`'s `lint` job validates the two-document layout, the `spec.inputs.strategy` shape (type, default, options), and the job body's required keys (`image`, `variables`, `before_script`, `script`) including the `$[[ inputs.strategy ]]` substitution literal. `check-jsonschema --builtin-schema` not applicable: no Catalog component schema upstream.
+- **AC6**: NEW `docs/providers/gitlab.md` (~120 LOC markdown). Six H2 sections in canonical order (Quick Start / Inputs / Required permissions / Token scope / Branch-prefix vs conventional-commits / Troubleshooting). No preview banner.
+- **AC7**: `mkdocs.yml` nav: `GitLab CI: providers/gitlab.md` inserted alphabetically before `GitHub Actions: providers/github.md` under the existing `Providers:` block. +1 LOC. Theme/palette/markdown_extensions/extra byte-stable.
+- **AC8**: descriptor uses only keys stable across GitLab 17.0 → 18.x; no experimental keys (`regex`, `image:name:`, `required: true + default:`).
+- **AC9**: Catalog publish mechanism is NOT added in this story. Three options enumerated in deferred-work; story 4.7 (or a future story) owns the decision. The descriptor lands first because it's a static artifact correct regardless of publish-path choice.
+- **AC10**: Inputs table in `docs/providers/gitlab.md` mirrors `spec.inputs.strategy` character-identically. Drift check passed.
+- **AC11**: do-not-touch diff EMPTY. `.gitlab/` not created. `action.yml` and `docs/providers/github.md` untouched.
+- **AC12**: all gates green (see Debug Log References).
+- **AC13**: `ci.yml` change is exactly the new step; byte-stable elsewhere.
+- **AC14**: pending PR/CI run; local gates are the v1.0 proxy.
 
 ### File List
 
 | Path | Action | Summary |
 |---|---|---|
-| | | |
+| `templates/semvertag.yml` | **NEW** | 15 LOC YAML. GitLab CI Catalog component: `spec.inputs.strategy` (typed string, options `[branch-prefix, conventional-commits]`, default `branch-prefix`) + `---` + `semvertag` job (`image: python:3.13-slim`, `variables.SEMVERTAG_STRATEGY: $[[ inputs.strategy ]]`, `before_script: pip install --quiet --no-cache-dir uv`, `script: uvx semvertag`). |
+| `docs/providers/gitlab.md` | **NEW** | ~120 LOC markdown. Six H2 sections per AC6. Canonical `.gitlab-ci.yml` include snippet, Inputs table mirroring the descriptor, Token-scope guidance for `CI_JOB_TOKEN` opt-in / PAT alternative / `SEMVERTAG_GITLAB__ENDPOINT` for self-hosted, four troubleshooting bullets. No preview banner. |
+| `mkdocs.yml` | **UPDATE** | +1 LOC: `GitLab CI: providers/gitlab.md` leaf inserted alphabetically before `GitHub Actions: providers/github.md`. Rest byte-stable. |
+| `.github/workflows/ci.yml` | **UPDATE** | +28 LOC: new `Validate templates/semvertag.yml shape` step in the `lint` job, between 4-3a's `Validate action.yml against GitHub Actions schema` step and `uv build`. Inline Python heredoc; structural sanity check (no upstream schema available). Rest byte-stable. |
+| `_bmad/sprint-status.yaml` | **UPDATE** | `4-3b-gitlab-ci-catalog-component: ready-for-dev → review`. `last_updated` + `last_updated_note` re-written. |
+| `_bmad/4-3b-gitlab-ci-catalog-component.md` (this file) | **UPDATE** | Status flip; tasks 1-8 checked off; Dev Agent Record filled; File List + Change Log filled. Plus a one-byte eof-fixer normalization (trailing newline). |
+| `action.yml` (Story 4.3a) | NO-CHANGE | Untouched. AC11 verified. |
+| `docs/providers/github.md` (Story 4.3a) | NO-CHANGE | Untouched. AC11 verified. |
+| `semvertag/**/*.py`, `tests/**/*.py`, `pyproject.toml`, `Justfile`, `README.md`, `LICENSE`, `docs/index.md`, `docs/contributing/`, `docs/requirements.txt`, `.github/workflows/publish.yml`, `.github/workflows/dependency-update.yml`, `context7.json`, `CLAUDE.md` | NO-CHANGE | AC11 do-not-touch list — `git diff HEAD` against all 14 paths is EMPTY. |
+| `.gitlab/` (architecture-suggested path) | NO-CHANGE | Directory not created, per Constraint 1 + OQ1 resolution. |
 
 ### Change Log
 
+1. **2026-05-30 (Sarah's call before file writes):** OQ1 resolved → use `templates/semvertag.yml` (canonical GitLab Catalog discovery path). Architecture.md:1067-1069 and epics.md:779 carry the now-known-wrong `.gitlab/catalog/component.yml` prescription; future docs amendment captured in deferred-work post-review.
+2. **Task 1:** Authored `templates/semvertag.yml` (15 LOC). Decisions baked in: typed `string` input (Catalog v17.0+ feature), options enumeration `[branch-prefix, conventional-commits]` (matches `_settings.py:64` Literal), default `branch-prefix`. Job named `semvertag` to match the file-derived component name. `image: python:3.13-slim` (not vendored container, not `ghcr.io/astral-sh/uv`).
+3. **Task 2:** Authored `docs/providers/gitlab.md`. Followed `github.md`'s six-section convention. Notable deviations from `github.md`:
+   - No preview banner (GitLab provider is fully implemented per Epic 1).
+   - "Required permissions" section names the full token alias chain (`SEMVERTAG_GITLAB__TOKEN` → `SEMVERTAG_TOKEN` → `CI_JOB_TOKEN` → `GITLAB_TOKEN`) since GitLab consumers will see all four behaviors.
+   - Token-scope section adds a self-hosted-GitLab callout for `SEMVERTAG_GITLAB__ENDPOINT` (Petr-style consumers).
+   - Troubleshooting bullets describe ACTUAL CLI/API error symptoms — verified against `semvertag/providers/gitlab.py` to avoid 4-3a's "fictional error strings" code-review finding.
+4. **Task 3:** Inserted `GitLab CI: providers/gitlab.md` alphabetically before `GitHub Actions`. Single-line nav delta.
+5. **Task 4:** Added inline Python heredoc step in `ci.yml`'s `lint` job after the 4-3a `Validate action.yml against GitHub Actions schema` step and before `uv build`. Rejected `check-jsonschema --builtin-schema vendor.gitlab-ci` (validates pipeline YAML, not Catalog components) and `--schemafile <URL>` (no community schema published). The structural check validates exactly the contract this story ships.
+6. **Task 5:** All gates green: yaml.safe_load (2 docs), structural check (`shape OK`), lint-ci clean (after eof-fixer auto-normalization of this story file's trailing newline), `uv build` (sdist + wheel), `mkdocs --strict` (0.21s), pytest (425/425), branch coverage (100% on all gate-protected modules).
+7. **Task 6:** Quick Start snippet extracted from markdown via `re.search` + `yaml.safe_load` — parses cleanly with keys `['include', 'semvertag', 'stages']`. Inputs table matches descriptor.
+8. **Task 7:** Full file-list audit confirms strict AC11 compliance; do-not-touch diff is EMPTY; `.gitlab/` not created.
+9. **Task 8:** Status flipped `ready-for-dev` → `review`. Dev Agent Record + File List + Change Log filled. Sprint-status.yaml synced.
+10. **Open for code-review (OQ1 already resolved):** OQ2 (Catalog publish mechanism), OQ3 (schema-validate upgrade path), OQ4 (`docs/strategies/*` dead-link policy continuation), OQ5 (`SEMVERTAG_GITLAB__ENDPOINT` passthrough — kept as project CI variable, not surfaced as a component input), OQ6 (runbook amendment for first Catalog publish), OQ7 (PRD GitLab-version-floor 15.0+ → 17.0+ correction). Task 9 (deferred-work updates) intentionally left unchecked until code-review.

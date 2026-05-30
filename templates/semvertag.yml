@@ -1,0 +1,16 @@
+spec:
+  inputs:
+    strategy:
+      description: 'Bump strategy. One of: branch-prefix (default), conventional-commits.'
+      type: string
+      options: [branch-prefix, conventional-commits]
+      default: branch-prefix
+---
+semvertag:
+  image: python:3.13-slim
+  variables:
+    SEMVERTAG_STRATEGY: $[[ inputs.strategy ]]
+  before_script:
+    - pip install --quiet --no-cache-dir uv
+  script:
+    - uvx semvertag

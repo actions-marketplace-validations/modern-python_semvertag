@@ -37,6 +37,34 @@ jobs:
           uvx --from check-jsonschema check-jsonschema \
             --builtin-schema vendor.github-actions \
             action.yml
+      - name: Validate templates/semvertag.yml shape
+        # GitLab CI Catalog component descriptor — no published JSON Schema
+        # exists upstream (verified 2026-05-30: not in check-jsonschema's
+        # vendor.* builtins, not on schemastore.org). Fall back to a
+        # structural sanity check via yaml.safe_load_all: confirms the
+        # two-document layout, the spec.inputs.strategy shape, and the
+        # job body's required keys. Upgrade path: switch to a real schema
+        # validator if/when GitLab publishes a Catalog component schema.
+        run: |
+          uv run --with pyyaml python - <<'PY'
+          import yaml
+          docs = list(yaml.safe_load_all(open('templates/semvertag.yml')))
+          assert len(docs) == 2, f'expected 2 YAML docs (spec + body), got {len(docs)}'
+          spec, body = docs
+          assert 'spec' in spec and 'inputs' in spec['spec'], 'spec.inputs missing'
+          inputs = spec['spec']['inputs']
+          assert set(inputs) == {'strategy'}, f'expected inputs={{strategy}}, got {set(inputs)}'
+          s = inputs['strategy']
+          assert s.get('type') == 'string'
+          assert s.get('default') == 'branch-prefix'
+          assert sorted(s.get('options', [])) == ['branch-prefix', 'conventional-commits']
+          assert 'semvertag' in body, 'job "semvertag" missing'
+          job = body['semvertag']
+          for key in ('image', 'variables', 'before_script', 'script'):
+              assert key in job, f'job.{key} missing'
+          assert job['variables'].get('SEMVERTAG_STRATEGY') == '$[[ inputs.strategy ]]'
+          print('templates/semvertag.yml shape OK')
+          PY
       - run: uv build
       - run: uv run --with-requirements docs/requirements.txt -- mkdocs build --strict
       - id: loc_gate
