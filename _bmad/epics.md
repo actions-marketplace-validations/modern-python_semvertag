@@ -776,7 +776,7 @@ So that GitLab CI adopters get a native one-liner integration path discoverable 
 
 **Acceptance Criteria:**
 
-**Given** `.gitlab/catalog/component.yml`
+**Given** `templates/semvertag.yml` (NOTE: this path corrects an earlier draft that prescribed `.gitlab/catalog/component.yml`; GitLab Catalog ingestion strictly scans `templates/` and the `.gitlab/catalog/` path is not Catalog-discoverable. Corrected during Story 4.3b code review on 2026-05-30; resolves OQ1.)
 **When** consumed by `include:` in a GitLab CI pipeline using GitLab Catalog v1
 **Then** the component declares its inputs (e.g., `strategy`), defaults, and runs `uvx semvertag` with `CI_JOB_TOKEN` auto-detected
 **And** a working example pipeline is included in `docs/providers/gitlab.md` showing the include snippet from Journey 1

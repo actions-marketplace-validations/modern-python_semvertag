@@ -42,6 +42,13 @@ if a bump is warranted by the configured strategy, pushes a new tag to
 the project's `origin`. If no bump is warranted, the job exits 0
 without pushing.
 
+> **Concurrency default.** The component sets `resource_group: semvertag`
+> so GitLab serializes concurrent `semvertag` jobs across pipelines on
+> the same project — back-to-back pushes will queue rather than race
+> the `create_tag` API. Override by redeclaring the job with
+> `resource_group: null` (or a different group name) in your
+> `.gitlab-ci.yml` if you intentionally want concurrent tag pushes.
+
 ## Inputs
 
 The component accepts one input. Its default matches what most
@@ -49,11 +56,14 @@ consumers want; you can omit the `inputs:` block entirely.
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `strategy` | no | `branch-prefix` | Bump strategy. One of `branch-prefix` or `conventional-commits`. |
+| `strategy` | no | `branch-prefix` | Bump strategy. One of: branch-prefix (default), conventional-commits. |
 
 The input names, defaults, and options are sourced from
 [`templates/semvertag.yml`](https://github.com/<org>/semvertag/blob/main/templates/semvertag.yml) —
 if this table ever drifts from the descriptor, the descriptor wins.
+
+> The `<org>` in the source link above is a literal placeholder; the
+> rendered URL will 404 until the project resolves it post-publish.
 
 ## Required permissions
 
@@ -84,10 +94,26 @@ Two cases govern which token the component should use:
   variable named `SEMVERTAG_TOKEN`; the alias chain picks it up
   ahead of `CI_JOB_TOKEN`.
 
+> **Masking caveat.** Because the alias chain reads
+> `SEMVERTAG_GITLAB__TOKEN` → `SEMVERTAG_TOKEN` → `CI_JOB_TOKEN` →
+> `GITLAB_TOKEN` in order and the first set value wins, a stale
+> `SEMVERTAG_TOKEN` left over from a prior PAT-based setup will
+> silently override a freshly-rotated `CI_JOB_TOKEN`. If you migrate
+> from PAT → job-token, unset `SEMVERTAG_TOKEN` (or rotate its value
+> to empty) in the project's CI/CD variables.
+
 **Self-hosted GitLab**: set `SEMVERTAG_GITLAB__ENDPOINT` (note the
-double underscore) as a project CI/CD variable pointing to the
+double underscore — pydantic-settings uses `__` as the nested-key
+delimiter, so `SEMVERTAG_GITLAB_ENDPOINT` with a single underscore is
+silently ignored) as a project CI/CD variable pointing to the
 instance's API root, e.g. `https://gitlab.example.com`. The default
 is `https://gitlab.com` and is not auto-derived from `CI_SERVER_FQDN`.
+
+> **Endpoint shape.** Use scheme + host only. Do NOT append `/api/v4`
+> (the client adds it); a value like `https://gitlab.example.com/api/v4`
+> produces `…/api/v4/api/v4/…` URLs and 404s. A missing scheme
+> (`gitlab.example.com`) fails at request time with httpx
+> `ConnectError`. A trailing slash is tolerated (the client strips it).
 
 For most consumers on `gitlab.com`-hosted projects with job-token
 write scope, the minimal include snippet above is the entire setup.
@@ -98,8 +124,9 @@ Pick `branch-prefix` if your team merges merge requests with branch
 names that follow a `fix/...`, `feat/...`, `chore/...` convention. The
 component reads the most recent merge commit's source-branch prefix
 and bumps accordingly — `fix/` bumps patch, `feat/` bumps minor,
-`chore/` bumps nothing. This is the default. A dedicated per-strategy
-explainer page ships in a later docs story.
+`chore/` bumps nothing. This is the default. See
+[Branch-prefix strategy](../strategies/branch-prefix.md) for the full
+prefix-to-bump table and edge-case behavior.
 
 Pick `conventional-commits` if your team writes
 [Conventional Commits](https://www.conventionalcommits.org/) messages
@@ -107,7 +134,9 @@ directly on the default branch (e.g. `feat: add X`, `fix: handle Y`,
 `feat!: drop Z`). The component scans commits since the last tag and
 chooses the highest bump implied by their type prefixes (`feat!` or
 `BREAKING CHANGE:` → major, `feat:` → minor, `fix:` → patch,
-everything else → none).
+everything else → none). See
+[Conventional Commits strategy](../strategies/conventional-commits.md)
+for the full type-to-bump mapping and commit-scanning rules.
 
 Set the strategy per project:
 
@@ -117,6 +146,10 @@ include:
     inputs:
       strategy: conventional-commits
 ```
+
+> The same `<org>` placeholder rule applies: replace with the actual
+> GitLab namespace that owns the published Catalog component, or
+> `include:` resolution fails at pipeline-load time.
 
 ## Troubleshooting
 

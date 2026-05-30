@@ -1064,9 +1064,8 @@ semvertag/
 │   │   └── new_provider_request.md             # funnel for Journey 4 contributors (FR22)
 │   └── PULL_REQUEST_TEMPLATE.md
 │
-├── .gitlab/                                    # GitLab CI Catalog component descriptor
-│   └── catalog/
-│       └── component.yml                       # FR40 — Catalog discovery
+├── templates/                                  # GitLab CI Catalog component descriptor (canonical Catalog-discoverable path)
+│   └── semvertag.yml                           # FR40 — Catalog discovery. NOTE: this line corrects an earlier draft that placed the descriptor at `.gitlab/catalog/component.yml` (also the path in `epics.md:779`). GitLab Catalog ingestion strictly scans `templates/` for component `.yml` files — the `.gitlab/catalog/` path is NOT discoverable. Corrected during Story 4.3b code review (2026-05-30); resolves OQ1.
 │
 ├── action.yml                                  # GitHub Actions Marketplace wrapper (FR41)
 │
