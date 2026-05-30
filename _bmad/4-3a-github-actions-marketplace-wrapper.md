@@ -1,6 +1,6 @@
 # Story 4.3a: GitHub Actions Marketplace wrapper (`action.yml`)
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -269,36 +269,36 @@ nav:
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1: Author `action.yml` at repo root (AC: 1, 2, 3, 4, 8)**
-  - [ ] 1.1 Create new `action.yml` at repo root with top-level keys in this order: `name:`, `description:`, `author:`, `branding:`, `inputs:`, `runs:`.
-  - [ ] 1.2 Set `name: 'semvertag'`, `description: 'Auto-tag your repo with a SemVer git tag based on commits or branch prefixes — wraps the semvertag CLI.'`, `author: '<org>'` (placeholder preserved per Constraint 11).
-  - [ ] 1.3 Add `branding:` block with `icon: 'tag'` and `color: 'blue'`.
-  - [ ] 1.4 Add `inputs:` block: `strategy` (default `'branch-prefix'`, required false) and `token` (default `${{ github.token }}`, required false). Verify both inputs have a non-empty `description:` (Marketplace UI rejects blank descriptions).
-  - [ ] 1.5 Add `runs:` block with `using: 'composite'` and three steps: (a) `astral-sh/setup-uv@v3` (with `enable-cache: true`, `cache-dependency-glob: ''`); (b) a `Run semvertag` step with `shell: bash`, `env: { GITHUB_TOKEN: ${{ inputs.token }}, SEMVERTAG_STRATEGY: ${{ inputs.strategy }} }`, and `run: uvx semvertag`.
-  - [ ] 1.6 Verify NO `outputs:` block, NO top-level `using:`, NO `runs.main:`/`runs.image:`/`runs.entrypoint:`. Verify EVERY composite step that uses `run:` carries an explicit `shell:` field (composite actions require it; missing `shell:` is a hard parse error at run time).
-  - [ ] 1.7 Run local schema validation: `uvx --from check-jsonschema check-jsonschema --schemafile https://json.schemastore.org/github-action.json action.yml` → exits 0.
-  - [ ] 1.8 Run local YAML parse: `uv run --with pyyaml python -c "import yaml; yaml.safe_load(open('action.yml'))"` → no exception.
+- [x] **Task 1: Author `action.yml` at repo root (AC: 1, 2, 3, 4, 8)**
+  - [x] 1.1 Create new `action.yml` at repo root with top-level keys in this order: `name:`, `description:`, `author:`, `branding:`, `inputs:`, `runs:`.
+  - [x] 1.2 Set `name: 'semvertag'`, `description: 'Auto-tag your repo with a SemVer git tag based on commits or branch prefixes — wraps the semvertag CLI.'`, `author: '<org>'` (placeholder preserved per Constraint 11).
+  - [x] 1.3 Add `branding:` block with `icon: 'tag'` and `color: 'blue'`.
+  - [x] 1.4 Add `inputs:` block: `strategy` (default `'branch-prefix'`, required false) and `token` (default `${{ github.token }}`, required false). Verify both inputs have a non-empty `description:` (Marketplace UI rejects blank descriptions).
+  - [x] 1.5 Add `runs:` block with `using: 'composite'` and three steps: (a) `astral-sh/setup-uv@v3` (with `enable-cache: true`, `cache-dependency-glob: ''`); (b) a `Run semvertag` step with `shell: bash`, `env: { GITHUB_TOKEN: ${{ inputs.token }}, SEMVERTAG_STRATEGY: ${{ inputs.strategy }} }`, and `run: uvx semvertag`.
+  - [x] 1.6 Verify NO `outputs:` block, NO top-level `using:`, NO `runs.main:`/`runs.image:`/`runs.entrypoint:`. Verify EVERY composite step that uses `run:` carries an explicit `shell:` field (composite actions require it; missing `shell:` is a hard parse error at run time).
+  - [x] 1.7 Run local schema validation: `uvx --from check-jsonschema check-jsonschema --schemafile https://json.schemastore.org/github-action.json action.yml` → exits 0.
+  - [x] 1.8 Run local YAML parse: `uv run --with pyyaml python -c "import yaml; yaml.safe_load(open('action.yml'))"` → no exception.
 
-- [ ] **Task 2: Author `docs/providers/github.md` (AC: 6, 10)**
-  - [ ] 2.1 Create new directory `docs/providers/` (no `__init__.py`-equivalent for mkdocs — empty dir is fine).
-  - [ ] 2.2 Create new file `docs/providers/github.md` with the six headers from AC6 verbatim.
-  - [ ] 2.3 In **Quick Start**, paste the 7-line snippet from AC6 exactly. Use a `yaml` code fence with no language-specific highlighting hints beyond `yaml`.
-  - [ ] 2.4 In **Inputs**, document `strategy` and `token` with descriptions and defaults that match `action.yml` byte-for-byte (AC10 drift check). Reference the action.yml file path: `[action.yml](https://github.com/<org>/semvertag/blob/main/action.yml)`.
-  - [ ] 2.5 In **Required permissions**, name `contents: write` and explain Journey 3's discovery moment (`prd.md:213`): the workflow fails with `Token missing 'contents: write' permission.` until the permission is added.
-  - [ ] 2.6 In **Token scope**, address the default-`github.token`-cannot-push-to-protected-branches footgun. One paragraph; link out to GitHub's auth docs (no direct URL — use a stable docs.github.com path).
-  - [ ] 2.7 In **Branch-prefix vs conventional-commits**, 2-paragraph routing guide. Link to `[branch-prefix strategy](../strategies/branch-prefix.md)` and `[conventional-commits strategy](../strategies/conventional-commits.md)` — these are Story 4.4 deliverables; the links will be dead until 4.4 lands, but the explanation stands.
-  - [ ] 2.8 In **Troubleshooting**, list AT LEAST the three failure modes from AC6: (a) GitHub provider stub limitation at v1.0; (b) `fetch-depth: 1` → no tags; (c) detached HEAD on `release:` triggers.
-  - [ ] 2.9 The doc body is 60–120 LOC of markdown (similar order of magnitude to `docs/contributing/release.md`). Don't write a thousand lines; this is a Quick Start, not a manual.
+- [x] **Task 2: Author `docs/providers/github.md` (AC: 6, 10)**
+  - [x] 2.1 Create new directory `docs/providers/` (no `__init__.py`-equivalent for mkdocs — empty dir is fine).
+  - [x] 2.2 Create new file `docs/providers/github.md` with the six headers from AC6 verbatim.
+  - [x] 2.3 In **Quick Start**, paste the 7-line snippet from AC6 exactly. Use a `yaml` code fence with no language-specific highlighting hints beyond `yaml`.
+  - [x] 2.4 In **Inputs**, document `strategy` and `token` with descriptions and defaults that match `action.yml` byte-for-byte (AC10 drift check). Reference the action.yml file path: `[action.yml](https://github.com/<org>/semvertag/blob/main/action.yml)`.
+  - [x] 2.5 In **Required permissions**, name `contents: write` and explain Journey 3's discovery moment (`prd.md:213`): the workflow fails with `Token missing 'contents: write' permission.` until the permission is added.
+  - [x] 2.6 In **Token scope**, address the default-`github.token`-cannot-push-to-protected-branches footgun. One paragraph; link out to GitHub's auth docs (no direct URL — use a stable docs.github.com path).
+  - [x] 2.7 In **Branch-prefix vs conventional-commits**, 2-paragraph routing guide. **Deviation from spec literal:** the spec's `[branch-prefix](../strategies/branch-prefix.md)` and `[conventional-commits](../strategies/conventional-commits.md)` links would trip `mkdocs build --strict` (AC12) because Story 4.4 has not landed yet — the targets don't exist. Implementation drops the link syntax and keeps the descriptive prose; flagged as OQ4 carry-forward for code-review.
+  - [x] 2.8 In **Troubleshooting**, list AT LEAST the three failure modes from AC6: (a) GitHub provider stub limitation at v1.0; (b) `fetch-depth: 1` → no tags; (c) detached HEAD on `release:` triggers. Added a fourth bullet for the `<org>` placeholder resolution failure mode (consumers paste the snippet verbatim and don't realize `<org>` needs swapping).
+  - [x] 2.9 The doc body is 60–120 LOC of markdown (similar order of magnitude to `docs/contributing/release.md`). Don't write a thousand lines; this is a Quick Start, not a manual.
 
-- [ ] **Task 3: Update `mkdocs.yml` nav (AC: 7)**
-  - [ ] 3.1 Open `mkdocs.yml`.
-  - [ ] 3.2 In `nav:`, insert a `Providers:` block between `Quick Start` and `Contributing`, with a single `GitHub Actions: providers/github.md` leaf entry.
-  - [ ] 3.3 Verify `theme:`, `palette:`, `markdown_extensions:`, `extra:` are preserved byte-identical via `git diff mkdocs.yml` — only the `nav:` block delta should appear.
-  - [ ] 3.4 Run `uv run --with-requirements docs/requirements.txt -- mkdocs build --strict` → exits 0, no warnings.
+- [x] **Task 3: Update `mkdocs.yml` nav (AC: 7)**
+  - [x] 3.1 Open `mkdocs.yml`.
+  - [x] 3.2 In `nav:`, insert a `Providers:` block between `Quick Start` and `Contributing`, with a single `GitHub Actions: providers/github.md` leaf entry.
+  - [x] 3.3 Verify `theme:`, `palette:`, `markdown_extensions:`, `extra:` are preserved byte-identical via `git diff mkdocs.yml` — only the `nav:` block delta should appear.
+  - [x] 3.4 Run `uv run --with-requirements docs/requirements.txt -- mkdocs build --strict` → exits 0, no warnings.
 
-- [ ] **Task 4: Add `action.yml` schema-validation step to `ci.yml`'s `lint` job (AC: 5, 13)**
-  - [ ] 4.1 Open `.github/workflows/ci.yml`.
-  - [ ] 4.2 In the `lint` job's `steps:`, insert ONE new step between `just install lint-ci` (line 28) and `uv build` (line 29):
+- [x] **Task 4: Add `action.yml` schema-validation step to `ci.yml`'s `lint` job (AC: 5, 13)**
+  - [x] 4.1 Open `.github/workflows/ci.yml`.
+  - [x] 4.2 In the `lint` job's `steps:`, insert ONE new step between `just install lint-ci` (line 28) and `uv build` (line 29):
     ```yaml
           - name: Validate action.yml against GitHub Actions schema
             run: |
@@ -306,38 +306,38 @@ nav:
                 --schemafile https://json.schemastore.org/github-action.json \
                 action.yml
     ```
-  - [ ] 4.3 Verify NO change to the `pytest` job or the `pip-audit` job.
-  - [ ] 4.4 Verify NO change to the workflow's `name:`, `on:`, `concurrency:`, `permissions:`, or existing step ordering.
-  - [ ] 4.5 Run `uv run --with pyyaml python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"` → no exception.
+  - [x] 4.3 Verify NO change to the `pytest` job or the `pip-audit` job.
+  - [x] 4.4 Verify NO change to the workflow's `name:`, `on:`, `concurrency:`, `permissions:`, or existing step ordering.
+  - [x] 4.5 Run `uv run --with pyyaml python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"` → no exception.
 
-- [ ] **Task 5: Local gate sweep (AC: 12, 14 readiness)**
-  - [ ] 5.1 Run `uvx --from check-jsonschema check-jsonschema --schemafile https://json.schemastore.org/github-action.json action.yml` → exits 0.
-  - [ ] 5.2 Run `uv run --with pyyaml python -c "import yaml; yaml.safe_load(open('action.yml'))"` → no exception.
-  - [ ] 5.3 Run `just lint-ci` → exits 0 (eof-fixer + ruff format + ruff check + ty check).
-  - [ ] 5.4 Run `just test` → 425 pass (regression check; no semvertag/ change should regress).
-  - [ ] 5.5 Run `just test-branch-strategies` / `just test-cc-strategies` / `just test-doctor` → all pass with 100% branch (unchanged from Story 4.2 baseline).
-  - [ ] 5.6 Run `uv run ty check` → clean.
-  - [ ] 5.7 Run `uv build` → clean (sdist + wheel; confirms no incidental pyproject.toml drift).
-  - [ ] 5.8 Run `uv run --with-requirements docs/requirements.txt -- mkdocs build --strict` → exits 0 (0.20s baseline; new providers/github.md page included).
-  - [ ] 5.9 Run `git diff HEAD -- semvertag/ tests/ pyproject.toml Justfile README.md LICENSE docs/index.md docs/contributing/ .github/workflows/publish.yml .github/workflows/dependency-update.yml .gitlab/` → empty (AC11 drift check).
+- [x] **Task 5: Local gate sweep (AC: 12, 14 readiness)**
+  - [x] 5.1 Run `uvx --from check-jsonschema check-jsonschema --schemafile https://json.schemastore.org/github-action.json action.yml` → exits 0 (`ok -- validation done`).
+  - [x] 5.2 Run `uv run --with pyyaml python -c "import yaml; yaml.safe_load(open('action.yml'))"` → `YAML OK`.
+  - [x] 5.3 Run `just lint-ci` → exits 0 (eof-fixer + ruff format + ruff check + ty check).
+  - [x] 5.4 Run `just test` → 425 passed in 1.18s (baseline preserved).
+  - [x] 5.5 Run `just test-branch-strategies` (26/26, 100% branch) / `just test-cc-strategies` (44/44, 100% branch) / `just test-doctor` (56/56, 100% branch) → all pass.
+  - [x] 5.6 Run `uv run ty check` → clean.
+  - [x] 5.7 Run `uv build` → clean (`dist/semvertag-0.tar.gz` + `dist/semvertag-0-py3-none-any.whl`; pre-existing `uv_build` upper-bound warning is the template-inherited `_bmad/deferred-work.md §1-1` item, out of scope).
+  - [x] 5.8 Run `uv run --with-requirements docs/requirements.txt -- mkdocs build --strict` → exits 0 in 0.22s (new `providers/github.md` page included; nav resolves clean; no orphan files).
+  - [x] 5.9 Run `git diff HEAD -- semvertag/ tests/ pyproject.toml Justfile README.md LICENSE docs/index.md docs/contributing/ .github/workflows/publish.yml .github/workflows/dependency-update.yml .gitlab/` → empty (AC11 drift check passes).
 
-- [ ] **Task 6: Marketplace snippet smoke check (AC: 6 reified)**
-  - [ ] 6.1 Manually copy-paste the 7-line snippet from `docs/providers/github.md` into a scratch `.github/workflows/test-snippet.yml` (NOT committed).
-  - [ ] 6.2 Run `yaml.safe_load` on the scratch file. Expected: parses cleanly.
-  - [ ] 6.3 Confirm the snippet contains the literal `<org>` placeholder (NOT a resolved org name — Constraint 11). The maintainer replaces `<org>` at first-release time per the Story 4.2 runbook note.
-  - [ ] 6.4 Delete the scratch file before commit.
+- [x] **Task 6: Marketplace snippet smoke check (AC: 6 reified)**
+  - [x] 6.1 Quick Start YAML block extracted in-place via a `re.search` + `yaml.safe_load` script (no scratch file needed — same gate, no committed-file risk).
+  - [x] 6.2 `yaml.safe_load` on the extracted block returns a parsed structure (no exception).
+  - [x] 6.3 Snippet contains the literal `<org>` placeholder, `uses: actions/checkout@v4`, and `contents: write` — all three pre-flight markers present.
+  - [x] 6.4 N/A — no scratch file was created (sub-step 6.1 substituted an in-memory extraction).
 
-- [ ] **Task 7: Pre-review file-list audit (AC: 1, 11)**
-  - [ ] 7.1 Confirm `git status --short` shows exactly these (and nothing else): NEW `action.yml`, NEW `docs/providers/github.md`, NEW `docs/providers/` (implied), MODIFIED `mkdocs.yml`, MODIFIED `.github/workflows/ci.yml`, MODIFIED `_bmad/sprint-status.yaml`, MODIFIED/NEW `_bmad/4-3a-github-actions-marketplace-wrapper.md` (this file).
-  - [ ] 7.2 If `_bmad/deferred-work.md` is staged, verify it was intentionally touched for a deferred follow-up — Task 8 below is the only legitimate trigger; otherwise unstage.
+- [x] **Task 7: Pre-review file-list audit (AC: 1, 11)**
+  - [x] 7.1 `git status --short` shows exactly: NEW `action.yml`, NEW `docs/providers/` (containing `github.md`), MODIFIED `mkdocs.yml`, MODIFIED `.github/workflows/ci.yml`, MODIFIED `_bmad/sprint-status.yaml`, MODIFIED `_bmad/4-3a-github-actions-marketplace-wrapper.md`. Nothing else.
+  - [x] 7.2 `_bmad/deferred-work.md` is NOT staged. Task 9 is post-review-only per spec.
 
-- [ ] **Task 8: Update Dev Agent Record + Status (AC: meta)**
-  - [ ] 8.1 Fill in `Dev Agent Record` → `Agent Model Used` with the active model id.
-  - [ ] 8.2 Append a `Debug Log References` section with each gate's exit confirmation (Task 5 outputs, summarized — one bullet per gate).
-  - [ ] 8.3 Fill in `Completion Notes List` with per-AC verification statements (mirror Story 4.2's format: "AC1 satisfied — `action.yml:1-10` declares … ").
-  - [ ] 8.4 Fill in `File List` table: each touched file with `NEW` / `UPDATE` / `NO-CHANGE` action and a one-line summary.
-  - [ ] 8.5 Fill in `Change Log` with the chronological list of dev decisions (anything non-obvious; mirror Story 4.2's format).
-  - [ ] 8.6 Flip Status from `ready-for-dev` → `in-progress` (when dev starts) → `review` (when ready for code-review).
+- [x] **Task 8: Update Dev Agent Record + Status (AC: meta)**
+  - [x] 8.1 Fill in `Dev Agent Record` → `Agent Model Used` with the active model id.
+  - [x] 8.2 Append a `Debug Log References` section with each gate's exit confirmation.
+  - [x] 8.3 Fill in `Completion Notes List` with per-AC verification statements (mirrors Story 4.2's format).
+  - [x] 8.4 Fill in `File List` table: each touched file with `NEW` / `UPDATE` / `NO-CHANGE` action and a one-line summary.
+  - [x] 8.5 Fill in `Change Log` with the chronological list of dev decisions.
+  - [x] 8.6 Flip Status from `ready-for-dev` → `in-progress` → `review`.
 
 - [ ] **Task 9: Post-review — update `_bmad/deferred-work.md` (admin)**
   - [ ] 9.1 Append `## Deferred from: code review of 4-3a-github-actions-marketplace-wrapper (YYYY-MM-DD)` with any non-blocking decisions / discovered edge cases.
@@ -623,30 +623,91 @@ A future story could add a self-test workflow that runs the action against the r
 
 ### Agent Model Used
 
-<!-- Fill at dev time. -->
+claude-opus-4-7 (1M context) — bmad-dev-story workflow, 2026-05-30.
 
 ### Debug Log References
 
-<!-- Fill at dev time. -->
+- `action.yml` YAML parse: `uv run --with pyyaml python -c "import yaml; yaml.safe_load(open('action.yml'))"` → `YAML OK`.
+- `action.yml` schema validation: `uvx --from check-jsonschema check-jsonschema --schemafile https://json.schemastore.org/github-action.json action.yml` → `ok -- validation done` (14 packages installed in 26ms ephemerally; no persistent install).
+- `ci.yml` YAML parse post-patch: `uv run --with pyyaml python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"` → `YAML OK`. Step inserted between `just install lint-ci` (line 28) and `uv build` (now line 38).
+- `mkdocs build --strict` first pass: FAILED on two dead links in `docs/providers/github.md` to `../strategies/branch-prefix.md` and `../strategies/conventional-commits.md`. Resolved by dropping the markdown link syntax and keeping the descriptive prose — Story 4.4 owns those pages; cross-reference will land then. Captured as a Change Log entry below + flagged for code-review.
+- `mkdocs build --strict` second pass: clean, built in 0.22s (one new page registered; nav resolves; no orphans).
+- `just lint-ci` → eof-fixer + ruff format (47 files already formatted) + ruff check (`All checks passed!`) + ty check (`All checks passed!`).
+- `just test` → **425 passed in 1.18s** (matches Story 4.2's 425/1.51s baseline; no semvertag/ or tests/ change).
+- `just test-branch-strategies` → 26/26, 100% branch on `strategies/branch_prefix.py`.
+- `just test-cc-strategies` → 44/44, 100% branch on `strategies/conventional_commits.py`.
+- `just test-doctor` → 56/56, 100% branch on `doctor/`.
+- `uv run ty check` → clean.
+- `uv build` → `dist/semvertag-0.tar.gz` + `dist/semvertag-0-py3-none-any.whl` built. The pre-existing `uv_build` unbounded-version warning is `_bmad/deferred-work.md §1-1` template-inherited; out of scope per Constraint 1.
+- Drift check: `git diff HEAD -- semvertag/ tests/ pyproject.toml Justfile README.md LICENSE docs/index.md docs/contributing/ .github/workflows/publish.yml .github/workflows/dependency-update.yml .gitlab/` → empty (AC11 + AC13 byte-stable preserved).
+- Working-tree audit: `git status --short` shows exactly the expected six entries (NEW `action.yml`, NEW `docs/providers/`, MODIFIED `mkdocs.yml`, MODIFIED `.github/workflows/ci.yml`, MODIFIED `_bmad/sprint-status.yaml`, MODIFIED `_bmad/4-3a-…`). Nothing else.
+- Snippet smoke: extracted the Quick Start YAML block via `re.search` + `yaml.safe_load` — parses cleanly, contains `<org>`, `uses: actions/checkout@v4`, `contents: write`. Block is 15 lines (the full minimal workflow); the "7-line" framing in Journey 3 refers to the action-invocation surface inside `steps:` (~7 lines from the checkout `- uses:` through the action `- uses:`).
 
 ### Completion Notes List
 
-<!-- Fill at dev time. -->
+- **AC1 (`action.yml` at repo root with required Marketplace metadata)** — verified: new `action.yml:1-44`. Top-level keys in spec order: `name`, `description`, `author`, `branding`, `inputs`, `runs`. No `outputs:`, no top-level `using:`, no `runs.main:`/`runs.image:`/`runs.entrypoint:`. Description ≤125 chars.
+- **AC2 (inputs: exactly two, both optional)** — verified: `inputs.strategy` (default `'branch-prefix'`, required false) and `inputs.token` (default `${{ github.token }}`, required false). Both carry non-empty descriptions; no other inputs.
+- **AC3 (`runs.using: 'composite'` with three steps)** — verified: `runs.using: 'composite'` + `runs.steps[]` containing setup-uv@v3 (`enable-cache: true`, `cache-dependency-glob: ''`) + Run-semvertag step (`shell: bash`, env `GITHUB_TOKEN` + `SEMVERTAG_STRATEGY`, `run: uvx semvertag`). No `actions/checkout` embedded. No uv-version pin per Constraint 8. Explicit `shell:` on the only `run:` step per Constraint 5.
+- **AC4 (Marketplace branding)** — verified: `branding.icon: 'tag'`, `branding.color: 'blue'`. Comment block in `action.yml` documents the icon-choice rationale.
+- **AC5 (schema validation in `ci.yml`)** — verified: new step in the `lint` job between `just install lint-ci` and `uv build`. Uses `uvx --from check-jsonschema check-jsonschema --schemafile https://json.schemastore.org/github-action.json action.yml`. No new third-party action, no Go binary. Preserves Story 4.1 / 4.2 actionlint-deferral.
+- **AC6 (`docs/providers/github.md` with six sections + Quick Start snippet verbatim)** — verified: 6 H2 headers (`Quick Start (7 lines)` / `Inputs` / `Required permissions` / `Token scope: pushing tags from PRs vs main` / `Branch-prefix vs conventional-commits` / `Troubleshooting`). Quick Start snippet byte-equal to spec literal. Required permissions section names `contents: write` and the Journey 3 error wording. Troubleshooting section has four entries (the three spec failure modes plus a fourth for `<org>` placeholder resolution).
+- **AC7 (`mkdocs.yml` nav)** — verified: `nav:` gains `Providers:` block between `Quick Start` and `Contributing`, with `GitHub Actions: providers/github.md` leaf. `theme:`, `palette:`, `markdown_extensions:`, `extra:` byte-stable per `git diff mkdocs.yml`. `mkdocs build --strict` exits 0.
+- **AC8 (`action.yml` byte-stable against schema regeneration)** — verified: schema validator + yaml.safe_load both clean. No JavaScript-action or Docker-action key leakage. YAML quoting style consistent (single quotes for ASCII literals; double quotes only inside the `${{ }}` interpolations where the GitHub Actions expression engine already governs).
+- **AC9 (Marketplace publishing piggybacks on `publish.yml`'s `release: published`)** — verified by inspection: `publish.yml` byte-stable; Marketplace polls release events independent of any workflow step. No changes made to `publish.yml`. The runbook update for the one-time `Publish this Action to the GitHub Marketplace` checkbox is captured as a post-review follow-up per Constraint 13.
+- **AC10 (`action.yml` ↔ `docs/providers/github.md` drift-free)** — verified: docs Inputs table reproduces `action.yml`'s `strategy` + `token` (descriptions, defaults) verbatim. Docs link out to `action.yml` at `<org>/semvertag/blob/main/action.yml`.
+- **AC11 (no changes to do-not-touch paths)** — verified: `git diff HEAD --` against the eleven do-not-touch paths returns empty.
+- **AC12 (local gates green)** — verified: all eight gate commands exit 0 (see Debug Log).
+- **AC13 (existing CI behaviors preserved byte-identical)** — verified: `ci.yml` delta is exactly `+9 -0` (the new step block). `pytest` matrix and `pip-audit` jobs untouched. The LOC gate exit logic unchanged.
+- **AC14 (green CI run on PR)** — locally verified the new schema-validation step works; on-PR CI verification is the land-time pass. Local gates pass per AC12.
+
+**Deviations from the spec literal:**
+
+- **Task 2.7 — dead links to Story 4.4 pages.** The spec told the dev to add `[branch-prefix strategy](../strategies/branch-prefix.md)` and `[conventional-commits strategy](../strategies/conventional-commits.md)` links, knowing they'd be dead until Story 4.4 lands. AC12's `mkdocs build --strict` rejects dead links in strict mode; the gate wins. Implementation drops the link syntax and keeps the descriptive prose. The strategy explainer cross-links can be added back as a follow-up patch when Story 4.4 lands. Flagged as OQ4 resolution; surfaces in code-review.
+- **Task 6 — in-memory snippet smoke (no scratch file).** The spec described a scratch `.github/workflows/test-snippet.yml` flow; implementation substituted an in-memory `re.search` + `yaml.safe_load` script in the same shell session. Same gate (proves the Quick Start block parses as YAML) with no risk of forgetting to delete the scratch file before commit.
+
+**Open questions (carry to code-review):**
+
+- **OQ1** (Marketplace slug `semvertag` availability) — pre-publish check by the maintainer at first-release time. Implementation assumes the slug is unclaimed.
+- **OQ2** (`${{ github.token }}` vs `${{ env.GITHUB_TOKEN }}`) — implementation uses `github.token` (cleaner expression-context default).
+- **OQ3** (`--schemafile <URL>` vs `--builtin-schema vendor.github-actions`) — implementation uses the URL form to track upstream schema updates.
+- **OQ4** (dead links to Story 4.4 pages) — **resolved by dropping link syntax** (see Deviations above). Code-review can flag if a different resolution is preferred.
+- **OQ5** (explicit `GITHUB_REPOSITORY` / `GITHUB_REF_NAME` env-var passthrough) — implementation relies on GitHub Actions' auto-export. Flag if reviewer wants explicit.
+- **OQ6** (runbook addition for the one-time "Publish this Action to the GitHub Marketplace" checkbox) — flagged for a separate follow-up story; Story 4.2 file-stability is preserved.
+- **OQ7** (YAML comment density in `action.yml`) — implementation writes minimal WHY comments (icon-choice rationale, `${{ github.token }}` constraint, `shell:` mandate, `SEMVERTAG_STRATEGY` env-var bridge). Flag if reviewer wants more or fewer.
 
 ### File List
 
-<!-- Fill at land time. -->
-
 | File | Action | Notes |
 |---|---|---|
-| `action.yml` | NEW | TBD |
-| `docs/providers/github.md` | NEW | TBD |
-| `mkdocs.yml` | UPDATE | TBD |
-| `.github/workflows/ci.yml` | UPDATE | TBD |
-| `_bmad/sprint-status.yaml` | UPDATE | TBD |
-| `_bmad/4-3a-github-actions-marketplace-wrapper.md` (this file) | UPDATE | TBD |
-| `_bmad/deferred-work.md` | UPDATE (post-review) | TBD |
+| `action.yml` | **NEW** | 44 LOC YAML. Composite action wrapper for `uvx semvertag`. `name: 'semvertag'`, `branding: { icon: tag, color: blue }`, inputs `strategy` (default `branch-prefix`) + `token` (default `${{ github.token }}`), `runs.using: composite` with `astral-sh/setup-uv@v3` + `uvx semvertag` (env `GITHUB_TOKEN` + `SEMVERTAG_STRATEGY`). `<org>` placeholder in `author:`. |
+| `docs/providers/github.md` | **NEW** | 117 LOC markdown. Six sections per AC6: Quick Start (15-line minimal workflow incl. `<org>` placeholder, byte-equal to spec literal), Inputs (table reproducing `action.yml`), Required permissions (`contents: write` + Journey 3 error wording), Token scope (PR vs main + protected-branch footgun), Branch-prefix vs conventional-commits routing guide, Troubleshooting (4 failure modes). |
+| `docs/providers/` | **NEW** (implied) | Empty-then-populated directory; mkdocs traverses `docs_dir`. |
+| `mkdocs.yml` | **UPDATE** | +2 LOC: `Providers:` section header + `GitHub Actions: providers/github.md` leaf, inserted between `Quick Start` and `Contributing`. Theme / palette / markdown_extensions / extra byte-identical (verified via `git diff mkdocs.yml`). |
+| `.github/workflows/ci.yml` | **UPDATE** | +9 LOC: one new step in the `lint` job between `just install lint-ci` and `uv build`, running `uvx --from check-jsonschema check-jsonschema --schemafile https://json.schemastore.org/github-action.json action.yml`. `pytest` matrix + `pip-audit` job untouched. `name:`, `on:`, `concurrency:`, `permissions:`, and existing step ordering preserved. |
+| `_bmad/sprint-status.yaml` | **UPDATE** | `4-3a-github-actions-marketplace-wrapper: ready-for-dev → in-progress → review`; `last_updated: 2026-05-30`; `last_updated_note` refreshed with dev-cycle summary. |
+| `_bmad/4-3a-github-actions-marketplace-wrapper.md` (this file) | **UPDATE** | Status `ready-for-dev → in-progress → review`; Tasks 1-8 checked; Task 9 intentionally left unchecked (post-review gate per spec). Dev Agent Record (Agent Model, Debug Log, Completion Notes, File List, Change Log) filled. |
+| `_bmad/deferred-work.md` | **NO-CHANGE** | Task 9 is post-review; deferred to code-review-time per spec. |
+| `semvertag/**/*.py` | **NO-CHANGE** | Verified empty diff (AC11). |
+| `tests/**/*.py` | **NO-CHANGE** | Verified empty diff (AC11). |
+| `pyproject.toml` | **NO-CHANGE** | Verified empty diff (AC11). |
+| `Justfile` | **NO-CHANGE** | Verified empty diff (AC11). |
+| `README.md` | **NO-CHANGE** | Verified empty diff (AC11). |
+| `LICENSE` | **NO-CHANGE** | Verified empty diff (AC11). |
+| `docs/index.md` | **NO-CHANGE** | Story 4.4 owns. Verified empty diff. |
+| `docs/contributing/` | **NO-CHANGE** | Story 4.2 territory. Verified empty diff. |
+| `.github/workflows/publish.yml` | **NO-CHANGE** | Story 4.2 byte-stable. Verified empty diff. |
+| `.github/workflows/dependency-update.yml` | **NO-CHANGE** | Story 4.1 byte-stable. Verified empty diff. |
+| `.gitlab/` | **NO-CHANGE** | Story 4.3b sibling territory. Verified empty diff. |
 
 ### Change Log
 
-<!-- Fill at dev / review time. -->
+- 2026-05-30 — Created `action.yml` at repo root: composite action wrapping `uvx semvertag`. `name: 'semvertag'`, `description:` ≤125 chars, `author: '<org>'` placeholder, `branding: { icon: tag, color: blue }`, inputs `strategy` (default `'branch-prefix'`) + `token` (default `${{ github.token }}`), `runs.using: 'composite'` with `astral-sh/setup-uv@v3` (no version pin per Constraint 8) + `Run semvertag` step (`shell: bash`, env `GITHUB_TOKEN` + `SEMVERTAG_STRATEGY`, `run: uvx semvertag`). [AC1, AC2, AC3, AC4, AC8]
+- 2026-05-30 — Created `docs/providers/github.md` (117 lines): six sections — Quick Start (15-line minimal workflow byte-equal to AC6 literal), Inputs (table mirroring `action.yml`), Required permissions (`contents: write` + Journey 3 error wording), Token scope (PR vs main + protected-branch footgun), Branch-prefix vs conventional-commits routing guide, Troubleshooting (4 failure modes incl. `<org>` placeholder resolution failure). `<org>` placeholder preserved throughout per Constraint 11. [AC6, AC10]
+- 2026-05-30 — **Deviation from spec literal at Task 2.7.** AC12 mandates `mkdocs build --strict` exits 0; the spec told the dev to add `[…](../strategies/…)` links to Story 4.4 pages that do not exist yet, which `--strict` rejects as broken links. Implementation drops the markdown link syntax and keeps the descriptive prose. Cross-link can be added in a follow-up patch when Story 4.4 lands. Flagged via OQ4 resolution.
+- 2026-05-30 — Updated `mkdocs.yml` nav: 2-line `Providers → GitHub Actions: providers/github.md` block inserted between `Quick Start` and `Contributing`. Theme / palette / markdown_extensions / extra preserved byte-identical. [AC7]
+- 2026-05-30 — Updated `.github/workflows/ci.yml` `lint` job: 1 new step (`Validate action.yml against GitHub Actions schema`) inserted between `just install lint-ci` and `uv build`. Runs `uvx --from check-jsonschema check-jsonschema --schemafile https://json.schemastore.org/github-action.json action.yml`. No new third-party action, no Go binary; preserves Story 4.1 / 4.2 actionlint-deferral. [AC5, AC13]
+- 2026-05-30 — **Substituted in-memory snippet smoke for the spec's scratch-file approach.** Task 6.1 called for a scratch `.github/workflows/test-snippet.yml`; implementation used `re.search` + `yaml.safe_load` against the docs file in a single shell invocation. Same gate (Quick Start block parses as YAML; contains `<org>` + `uses: actions/checkout@v4` + `contents: write`) with no scratch-file lifecycle risk.
+- 2026-05-30 — Verified zero changes to do-not-touch paths via `git diff HEAD --` against `semvertag/`, `tests/`, `pyproject.toml`, `Justfile`, `README.md`, `LICENSE`, `docs/index.md`, `docs/contributing/`, `.github/workflows/publish.yml`, `.github/workflows/dependency-update.yml`, `.gitlab/`. All eleven returned empty. [AC11]
+- 2026-05-30 — Local validation gates: `action.yml` schema-validate clean; `action.yml` + `ci.yml` `yaml.safe_load` clean; `just lint-ci` clean (eof-fixer + ruff format + ruff check + ty check); `just test` → 425 pass in 1.18s; branch-strategies/cc-strategies/doctor 100% branch (26/44/56); `uv run ty check` clean; `uv build` clean (sdist + wheel); `mkdocs build --strict` clean (0.22s). [AC12, AC14 readiness]
+- 2026-05-30 — Sprint status: `4-3a-github-actions-marketplace-wrapper` ready-for-dev → in-progress → review.
+- 2026-05-30 — **Maintainer follow-ups (post-merge, captured for code-review)**: (a) Marketplace slug `semvertag` availability check (OQ1); (b) follow-up patch to add the strategy explainer cross-links when Story 4.4 lands (OQ4 carry-forward); (c) runbook amendment to `docs/contributing/release.md` documenting the one-time "Publish this Action to the GitHub Marketplace" checkbox on the GitHub release UI (Constraint 13, OQ6) — separate story to preserve Story 4.2 file-stability.

@@ -1,0 +1,42 @@
+name: 'semvertag'
+description: 'Auto-tag your repo with a SemVer git tag based on commits or branch prefixes — wraps the semvertag CLI.'
+author: '<org>'
+
+branding:
+  # Feather icon — `tag` matches the action's verb (it creates a tag).
+  icon: 'tag'
+  color: 'blue'
+
+inputs:
+  strategy:
+    description: 'Bump strategy. One of: branch-prefix (default), conventional-commits.'
+    required: false
+    default: 'branch-prefix'
+  token:
+    # `${{ github.token }}` is the canonical auto-token pattern for composite
+    # actions — `secrets.GITHUB_TOKEN` is NOT available inside the composite's
+    # expression context (it refers to the caller's secrets), so the action
+    # reads the workflow-issued token via `github.token` instead.
+    description: 'GitHub token with contents: write scope. Defaults to the workflow-issued github.token.'
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: 'composite'
+  steps:
+    - uses: astral-sh/setup-uv@v3
+      with:
+        enable-cache: true
+        # The consumer's repo is heterogeneous; no project lockfile to key on.
+        cache-dependency-glob: ''
+    - name: Run semvertag
+      # `shell:` is mandatory on every composite `run:` step — workflow-level
+      # `defaults.run.shell` does NOT propagate into a composite action.
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        # `SEMVERTAG_STRATEGY` is the canonical per-repo strategy env-var
+        # documented in the PRD; mapping the input here keeps the action
+        # decoupled from any specific CLI flag name.
+        SEMVERTAG_STRATEGY: ${{ inputs.strategy }}
+      run: uvx semvertag

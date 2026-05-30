@@ -26,6 +26,15 @@ jobs:
           cache-dependency-glob: "**/pyproject.toml"
       - run: uv python install 3.10
       - run: just install lint-ci
+      - name: Validate action.yml against GitHub Actions schema
+        # JSON Schema validation via check-jsonschema (Python; runs through
+        # uvx — no new Go binary, no third-party action). Tracks the
+        # SchemaStore action.yml schema, which mirrors GitHub's published
+        # metadata syntax. Preserves Story 4.1 / 4.2's actionlint-deferral.
+        run: |
+          uvx --from check-jsonschema check-jsonschema \
+            --schemafile https://json.schemastore.org/github-action.json \
+            action.yml
       - run: uv build
       - run: uv run --with-requirements docs/requirements.txt -- mkdocs build --strict
       - id: loc_gate
