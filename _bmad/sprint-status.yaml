@@ -1,5 +1,5 @@
 # generated: 2026-05-26
-# last_updated: 2026-05-30 (Story 4.3a dev complete — Status: review; action.yml + docs/providers/github.md + mkdocs nav + ci.yml schema-validate step land; all gates green; ready for code-review)
+# last_updated: 2026-05-30 (Story 4.3a code-review complete — Status: done; 2 decision-needed resolved (preview banner / accept token-default), 7 patches applied (preview admonition + 3 troubleshooting rewrites + SEMVERTAG_PROVIDER env + --builtin-schema swap + heading + Required-setup callout + PAT example), 10 deferred to _bmad/deferred-work.md, 5 dismissed; gates re-validated green)
 # project: semvertag
 # project_key: NOKEY
 # tracking_system: file-system
@@ -69,7 +69,7 @@ development_status:
   epic-4: in-progress
   4-1-ci-workflow-polish: done
   4-2-publish-workflow-via-trusted-publishing: done
-  4-3a-github-actions-marketplace-wrapper: review
+  4-3a-github-actions-marketplace-wrapper: done
   4-3b-gitlab-ci-catalog-component: backlog
   4-4-mkdocs-site-content: backlog
   4-5-three-migration-guides: backlog

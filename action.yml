@@ -39,4 +39,9 @@ runs:
         # documented in the PRD; mapping the input here keeps the action
         # decoupled from any specific CLI flag name.
         SEMVERTAG_STRATEGY: ${{ inputs.strategy }}
+        # Route the CLI at GitHub's provider. Without this, the CLI defaults
+        # to `provider: gitlab` (see `semvertag/_settings.py`), so a GitHub
+        # consumer hits `Project id missing` instead of the documented
+        # "GitHub provider is a stub at v1.0" path.
+        SEMVERTAG_PROVIDER: github
       run: uvx semvertag

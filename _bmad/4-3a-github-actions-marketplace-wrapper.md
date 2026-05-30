@@ -1,6 +1,6 @@
 # Story 4.3a: GitHub Actions Marketplace wrapper (`action.yml`)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -347,6 +347,46 @@ nav:
   - [ ] 9.3 Specifically capture: (a) whether the schemastore.org schema URL needs an SHA/version pin (today it tracks the schema repo's `main`; a future schema-incompatibility could break the gate without any commit to this repo); (b) whether `check-jsonschema` itself should be version-pinned in CI (matches Story 4.2's uv-version-pin decision pattern); (c) whether a follow-up story should add a Justfile recipe `lint-action-yml` once a second action-style file lands (e.g., 4.3b's GitLab catalog descriptor, which uses a different schema).
 
 > **Note**: Task 9 (deferred-work updates) is gated on code-review per its own header ("Post-review"); intentionally left unchecked until code-review lands. Mirrors Story 4.2 Task 11 discipline.
+
+### Review Findings
+
+_Triage from `/bmad-code-review` on 2026-05-30 against commit `76ddc3d`. Three layers run: Blind Hunter (diff-only), Edge Case Hunter (diff + project), Acceptance Auditor (diff + spec). Spec compliance verified — all 14 ACs satisfied. Findings below are about real-world correctness, not AC pass/fail._
+
+**Decision-needed (resolved 2026-05-30):**
+
+- [x] [Review][Decision] Marketplace listing wraps a non-functional CLI surface — **Resolved → patch (add preview banner).** `ioc.py:161-163` raises `ConfigError("Provider 'github' not yet supported; v1.0 supports gitlab only.")`; `providers/` ships only `gitlab.py`. Sarah's call: add a prominent "Status: preview — non-functional at v1.0; GitHub provider scheduled for v1.x" banner to the top of `docs/providers/github.md`. See Patch list below (new patch item).
+- [x] [Review][Decision] `default: ${{ github.token }}` + `env.GITHUB_TOKEN: ${{ inputs.token }}` empty-string clobber — **Resolved → accepted as-is.** AC2 mandates the canonical default form; the inline rationale in `action.yml` documents the choice. Failure mode is "consumer-passed-empty → 401 from API" which is loud, not silent. No action; not the consumer-default path.
+
+**Patch (7)** — applied 2026-05-30; gates green (schema-validate `ok`, yaml.safe_load OK, mkdocs `--strict` 0.23s, `just lint-ci` clean, 425 tests pass):
+
+- [x] [Review][Patch] **(new from Decision #1)** Add preview-status banner to top of `docs/providers/github.md` — applied. Material admonition `!!! warning "v1.0 status: distribution-channel preview"` block inserted directly under the H1, surfacing the GitHub-provider-is-a-stub state before the intro paragraph.
+- [x] [Review][Patch] Troubleshooting quotes 3 fictional error strings — applied. Removed the fabricated `Token missing 'contents: write' permission.` code block in *Required permissions* (replaced with prose describing the actual `403 Forbidden` from the REST API). Rewrote the *No tags* bullet to describe the real `status: no_tags` / `_NO_TAGS_REASON` exit-0 path. Rewrote the *Detached HEAD* bullet to a permission-denied scenario (the actual API-driven failure mode), since the CLI never reads a local branch name.
+- [x] [Review][Patch] `action.yml` does not pass `SEMVERTAG_PROVIDER=github` — applied. `SEMVERTAG_PROVIDER: github` added to the composite step's `env:` block with a comment explaining the default-routes-to-gitlab failure mode. Pairs with the preview banner — failure mode now matches the documented stub story.
+- [x] [Review][Patch] Schema-validate step uses remote URL + unpinned `uvx --from check-jsonschema` — applied. `--schemafile https://json.schemastore.org/github-action.json` swapped for `--builtin-schema vendor.github-actions`. Verified locally: `ok -- validation done`. Closes OQ3.
+- [x] [Review][Patch] Quick Start heading "(7 lines)" mismatches the 15-line snippet — applied. `## Quick Start (7 lines)` → `## Quick Start`. Intro paragraph's "the seven lines below" → "the snippet below". Minor deviation from spec literal H2 wording, but the spec wording was the lie; the snippet is byte-equal and AC6 §snippet still passes.
+- [x] [Review][Patch] No explicit "Required setup" callout before the Quick Start snippet — applied. Blockquote inserted between the section intro and the snippet, explicitly stating consumers must add `actions/checkout@v4` with full history + tags before the action.
+- [x] [Review][Patch] Token-scope section lacks a concrete PAT example — applied. Indented `yaml` code block added under the *Pushing to a protected branch* bullet showing `with: token: ${{ secrets.SEMVERTAG_PAT }}`.
+
+**Defer (10)** — pre-existing or out-of-scope; appended to `_bmad/deferred-work.md`:
+
+- [x] [Review][Defer] `strategy` input has no upfront enum validation [`action.yml:11-14`] — GH Actions platform doesn't support `inputs.<name>.options:` for composite actions; pydantic ValidationError at CLI runtime is the only feedback. Mitigated by inputs-table docs.
+- [x] [Review][Defer] `<org>/semvertag@v1` floating tag — no SHA-pin guidance [`docs/providers/github.md:29`] — SHA-pinning is org policy; out of v1.0 docs scope.
+- [x] [Review][Defer] `astral-sh/setup-uv@v3` unpinned third-party [`action.yml:27`] — industry-standard tradeoff; rationale in Constraint 8.
+- [x] [Review][Defer] `actions/checkout@v4` unpinned in Quick Start [`docs/providers/github.md:25`] — same.
+- [x] [Review][Defer] `uvx semvertag` not version-pinned [`action.yml:42`] — same org owns CLI + action.
+- [x] [Review][Defer] `shell: bash` — composite incompatible with self-hosted Windows runners without Git Bash [`action.yml:35`] — corner case; add docs note in a future polish pass.
+- [x] [Review][Defer] `fetch-tags: true` redundant alongside `fetch-depth: 0` [`docs/providers/github.md:26-28`] — harmless; preserved for AC6 byte-equality.
+- [x] [Review][Defer] em-dash in `description:` (action.yml:2) — verified 105 chars (under 125 limit); cosmetic only.
+- [x] [Review][Defer] `author: '<org>'` literal placeholder [`action.yml:3`] — owned by Story 4.7 (cross-repo placeholder resolution).
+- [x] [Review][Defer] Marketplace docs link to `https://github.com/marketplace/actions/semvertag` (`docs/providers/github.md:5`) — resolves on first Marketplace publish; broken until then is acceptable pre-launch.
+
+**Dismissed (5)** — noise / false positives:
+
+- `cache-dependency-glob: ''` ambiguity — inline comment in `action.yml:31` is sufficient; semantics stable per `setup-uv@v3`.
+- `mkdocs.yml` nav structure ambiguous from diff — verified by `mkdocs build --strict` exit 0.
+- AC3 spec text says "three steps" but the spec's own YAML example shows two — spec text bug, not implementation defect. Worth a future spec-only patch; not a code-review action.
+- Branch-prefix description "labels" → "branch names" (`docs/providers/github.md:97-102`) — docs are semantically more accurate than the spec phrasing (branch-prefix reads branch names, not PR labels).
+- All four Acceptance Auditor "deviation" findings (Task 2.7 dead links, Task 6 in-memory smoke, 4th troubleshooting bullet, OQ7 comment density) — already acknowledged in the Change Log / Completion Notes.
 
 ## Dev Notes
 

@@ -28,12 +28,14 @@ jobs:
       - run: just install lint-ci
       - name: Validate action.yml against GitHub Actions schema
         # JSON Schema validation via check-jsonschema (Python; runs through
-        # uvx — no new Go binary, no third-party action). Tracks the
-        # SchemaStore action.yml schema, which mirrors GitHub's published
-        # metadata syntax. Preserves Story 4.1 / 4.2's actionlint-deferral.
+        # uvx — no new Go binary, no third-party action). `--builtin-schema
+        # vendor.github-actions` uses the schema vendored with check-jsonschema
+        # itself, avoiding a per-run fetch from schemastore.org and removing
+        # the upstream-schema-drift / outage failure mode. Preserves Story
+        # 4.1 / 4.2's actionlint-deferral.
         run: |
           uvx --from check-jsonschema check-jsonschema \
-            --schemafile https://json.schemastore.org/github-action.json \
+            --builtin-schema vendor.github-actions \
             action.yml
       - run: uv build
       - run: uv run --with-requirements docs/requirements.txt -- mkdocs build --strict

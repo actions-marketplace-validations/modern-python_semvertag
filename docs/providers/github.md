@@ -1,15 +1,32 @@
 # GitHub Actions
 
+!!! warning "v1.0 status: distribution-channel preview"
+
+    The Marketplace action is published so consumers can start wiring up
+    their workflows, but the wrapped CLI's GitHub provider is a stub at
+    v1.0 — `uvx semvertag` will exit non-zero with
+    `Provider 'github' not yet supported; v1.0 supports gitlab only.` until
+    the GitHub provider lands in a v1.x release. Everything below describes
+    the intended steady-state behavior; use it to plan your workflow now and
+    re-enable the action when the provider ships.
+
 Use semvertag in GitHub Actions via the [Marketplace
 action](https://github.com/marketplace/actions/semvertag). The action is a
 thin composite wrapper around the `semvertag` CLI — it installs `uv`, then
 runs `uvx semvertag` with the workflow-issued `GITHUB_TOKEN` and your chosen
 strategy. No PyPI install in your repo, no maintained workflow YAML beyond
-the seven lines below.
+the snippet below.
 
-## Quick Start (7 lines)
+## Quick Start
 
-The minimum useful workflow: auto-tag on every push to `main`.
+The minimum useful workflow: auto-tag on every push to `main`. The action
+itself is one `- uses:` line; the surrounding boilerplate (trigger,
+permissions, checkout) is GitHub Actions' standard scaffolding.
+
+> **Required setup.** The action does not embed `actions/checkout` (the
+> consumer's caller workflow owns checkout — see the rationale in the
+> action's runbook). You MUST add an `actions/checkout@v4` step with
+> `fetch-depth: 0` and `fetch-tags: true` before invoking the action.
 
 ```yaml
 name: Auto-tag
@@ -63,14 +80,10 @@ permissions:
   contents: write
 ```
 
-Omitting this is the most common first-run failure. The CLI surfaces it as:
-
-```
-Token missing 'contents: write' permission.
-```
-
-Add the block at either the job level (recommended; narrower blast radius)
-or the workflow level. No other permissions are required.
+Omitting this is the most common first-run failure — the action's tag-push
+step gets a `403 Forbidden` from the GitHub REST API and the job fails.
+Add the `permissions:` block at either the job level (recommended; narrower
+blast radius) or the workflow level. No other permissions are required.
 
 ## Token scope: pushing tags from PRs vs main
 
@@ -82,7 +95,13 @@ not work, and how to mitigate:
   default token from bypassing branch-protection rules even with
   `contents: write`. Use a [GitHub App token](https://docs.github.com/en/apps/creating-github-apps)
   or a Personal Access Token (PAT) stored in repo secrets, passed via
-  `with: token:`.
+  `with: token:`:
+
+    ```yaml
+    - uses: <org>/semvertag@v1
+      with:
+        token: ${{ secrets.SEMVERTAG_PAT }}
+    ```
 - **Pull-request workflows.** The default token in a `pull_request:` event
   is intentionally restricted — it cannot push to the upstream repo, only
   to the PR's own fork. Auto-tagging from a PR therefore does not work with
@@ -126,17 +145,18 @@ Set the strategy per repo:
   CLI exits non-zero with this message. Track the GitHub provider story in
   the project's epic list.
 
-- **"No tags found; refusing to bump from sentinel"** — the checkout step
-  is the most common cause. The default `actions/checkout@v4` uses
-  `fetch-depth: 1` and does not fetch tags, so semvertag sees an empty
-  tag history. Add `fetch-depth: 0` and `fetch-tags: true` to the checkout
-  step (the Quick Start snippet already does this).
+- **First run on a repo with no SemVer tags** — the CLI reports
+  `status: no_tags` and exits 0 without bumping (`semvertag/_use_case.py`'s
+  `_NO_TAGS_REASON`). v1.0 deliberately does not seed an initial tag.
+  Create the first tag manually (e.g. `git tag v0.1.0 && git push --tags`)
+  and re-run; subsequent runs will bump from there.
 
-- **"Detached HEAD; no current branch"** on a `release: published` trigger
-  — release events check out the release tag's commit, which is a detached
-  HEAD. The branch-prefix strategy needs a current branch name to read the
-  merge-commit source; switch the trigger to `push: branches: [main]` or
-  use `conventional-commits` instead.
+- **Permission denied when pushing the tag** — the workflow's job-level
+  permissions block is missing `contents: write`, or the runner's token (a
+  PAT or App token) lacks repo write scope. Add
+  `permissions: { contents: write }` at the job level (see *Required
+  permissions* above) and, if you've supplied a custom token via
+  `with: token:`, confirm its scopes.
 
 - **`uses: <org>/semvertag@v1` fails to resolve** — `<org>` is a literal
   placeholder in this documentation. Replace it with the actual GitHub
