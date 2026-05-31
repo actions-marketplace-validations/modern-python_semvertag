@@ -38,5 +38,26 @@ class HttpClient:
             msg = f"response shape invalid: {exc}"
             raise ProviderAPIError(msg) from exc
 
+    def request_many(self, method: str, url: str, *, schema: type[T], **kwargs: typing.Any) -> list[T]:  # noqa: ANN401
+        try:
+            response = self.client.request(method, url, headers=self.auth_headers(), **kwargs)
+        except httpx2.RequestError as exc:
+            msg = f"request failed: {type(exc).__name__}"
+            raise ProviderAPIError(msg) from exc
+        self.status_translator(response.status_code)
+        try:
+            payload = response.json()
+        except (ValueError, httpx2.DecodingError) as exc:
+            msg = "malformed JSON in response body"
+            raise ProviderAPIError(msg) from exc
+        if not isinstance(payload, list):
+            msg = f"response shape invalid: expected list, got {type(payload).__name__}"
+            raise ProviderAPIError(msg)
+        try:
+            return [schema.model_validate(item) for item in payload]
+        except pydantic.ValidationError as exc:
+            msg = f"response shape invalid: {exc}"
+            raise ProviderAPIError(msg) from exc
+
 
 __all__: typing.Final = ("AuthHeaders", "HttpClient", "StatusTranslator")
