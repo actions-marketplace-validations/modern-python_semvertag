@@ -62,7 +62,6 @@ class Settings(pydantic_settings.BaseSettings):
     )
 
     strategy: typing.Literal["branch-prefix", "conventional-commits"] = "branch-prefix"
-    provider: typing.Literal["gitlab", "github", "bitbucket"] = "gitlab"
     default_branch: str | None = None
     request_timeout: float = pydantic.Field(default=8.0, gt=0)
     project_id: int | None = pydantic.Field(

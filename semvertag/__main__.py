@@ -18,7 +18,7 @@ _PACKAGE_NAME: typing.Final = "semvertag"
 
 MAIN_APP: typing.Final = typer.Typer(
     name="semvertag",
-    help=("Auto-tag GitLab/GitHub/Bitbucket repos with semantic version tags — one tool, two strategies."),
+    help=("Auto-tag GitLab repos with semantic version tags — one tool, two strategies."),
     no_args_is_help=True,
     add_completion=True,
 )
@@ -41,7 +41,6 @@ def _collect_overrides(  # noqa: PLR0913
     *,
     project_id: int | None,
     strategy: str | None,
-    provider: str | None,
     token: str | None,
     default_branch: str | None,
     gitlab_endpoint: str | None,
@@ -52,8 +51,6 @@ def _collect_overrides(  # noqa: PLR0913
         overrides["project_id"] = project_id
     if strategy is not None:
         overrides["strategy"] = strategy
-    if provider is not None:
-        overrides["provider"] = provider
     if token is not None:
         overrides["gitlab.token"] = pydantic.SecretStr(token)
     if default_branch is not None:
@@ -73,12 +70,6 @@ def _config_error_from_validation(exc: pydantic.ValidationError) -> ConfigError:
     return ConfigError(msg)
 
 
-def _validate_settings(settings: Settings) -> None:
-    if settings.provider != "gitlab":
-        msg = f"Provider {settings.provider!r} not yet supported; v1.0 supports gitlab only."
-        raise ConfigError(msg)
-
-
 @MAIN_APP.callback()
 def _main_callback(  # noqa: PLR0913
     ctx: typer.Context,
@@ -89,10 +80,6 @@ def _main_callback(  # noqa: PLR0913
     strategy: typing.Annotated[
         str | None,
         typer.Option("--strategy", help="Bump strategy: branch-prefix | conventional-commits."),
-    ] = None,
-    provider: typing.Annotated[
-        str | None,
-        typer.Option("--provider", help="Provider: gitlab | github | bitbucket."),
     ] = None,
     token: typing.Annotated[
         str | None,
@@ -124,7 +111,6 @@ def _main_callback(  # noqa: PLR0913
             overrides = _collect_overrides(
                 project_id=project_id,
                 strategy=strategy,
-                provider=provider,
                 token=token,
                 default_branch=default_branch,
                 gitlab_endpoint=gitlab_endpoint,
@@ -133,7 +119,6 @@ def _main_callback(  # noqa: PLR0913
             settings = apply_cli_overlay(settings, overrides)
         except ValueError as exc:
             raise ConfigError(str(exc)) from exc
-        _validate_settings(settings)
     except pydantic.ValidationError as exc:
         err = _config_error_from_validation(exc)
         typer.echo(f"Error: {err}", err=True)

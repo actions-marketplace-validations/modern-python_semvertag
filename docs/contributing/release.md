@@ -8,16 +8,12 @@ to ship a release (NFR13).
 
 ## One-time setup (already done; documented for posterity)
 
-> **Note:** Replace `<org>` below with the actual GitHub organization or user
-> name that owns this repository. The literal string `<org>` will not match
-> PyPI's OIDC subject claim and the first publish will fail.
-
 The trusted-publisher binding between this repo and PyPI is configured once,
 before the first release. If this is being repeated (account migration, fork,
 or recovery), all four fields below MUST match the workflow exactly.
 
 - **PyPI side:** project page → Publishing → Add a trusted publisher
-  - Owner: `<org>`
+  - Owner: `modern-python`
   - Repository: `semvertag`
   - Workflow filename: `publish.yml`
   - Environment name: `pypi`
@@ -38,33 +34,24 @@ or recovery), all four fields below MUST match the workflow exactly.
 
 1. Land all PRs intended for the release on `main`. Verify CI is green
    (`lint`, `pytest` matrix, `pip-audit`).
-2. Open a release-prep PR that:
-   - Bumps `[project.version]` in `pyproject.toml` to the target SemVer 2.0
-     value (e.g. `0.1.0`, `1.0.0`). Leading-zero numerics (e.g. `01.0.0`)
-     are rejected by the publish workflow's tag guard. **This bump is
-     required for every release**, including the second release onward —
-     `[project.version]` on `main` between releases reflects the most
-     recently released version, so a missed bump will tag against the
-     previous version and the guard will refuse to publish.
-   - Adds a one-line release note to the GitHub release body when drafting
-     the release (Story 4.6 will introduce `CHANGELOG.md`; this step expands
-     when 4.6 lands).
-3. Merge the release-prep PR.
-4. On GitHub → Releases → **Draft a new release**:
-   - Tag: `v<X.Y.Z>` (must match `[project.version]` byte-equal after
-     stripping the leading `v`).
+2. On GitHub → Releases → **Draft a new release**:
+   - Tag: `v<X.Y.Z>` (strict SemVer 2.0; no leading zeros; e.g. `v0.1.0`).
    - Title: `v<X.Y.Z>`.
-   - Body: one-line release note (until `CHANGELOG.md` lands via Story 4.6),
-     or use GitHub's auto-generated notes.
+   - Body: one-line release note, or use GitHub's auto-generated notes.
    - Click **Publish release**.
-5. The `publish.yml` workflow auto-fires on `release: published`:
-   - Verifies the release tag matches `[project.version]` (refuses to publish
-     on any mismatch — see Troubleshooting below).
+
+   > `[project.version]` in `pyproject.toml` stays `"0"` as a placeholder —
+   > no version bump is needed before tagging. The publish workflow calls
+   > `uv version $TAG` at build time to inject the real version.
+
+3. The `publish.yml` workflow auto-fires on `release: published`:
+   - Validates the tag as strict SemVer 2.0 and strips the leading `v`.
+   - Runs `uv version $TAG` to stamp `pyproject.toml` with the release version.
    - Runs `uv build` → produces wheel + sdist in `dist/`.
    - Runs `uv publish` → uv detects the GitHub Actions OIDC environment,
      exchanges the token with PyPI, and uploads the wheel + sdist (plus any
      PEP 740 attestations found alongside the dist files).
-6. Verify on <https://pypi.org/project/semvertag/> that the new version is
+4. Verify on <https://pypi.org/project/semvertag/> that the new version is
    listed and the wheel + sdist are downloadable.
 
 ## v1.0 (and any subsequent major) pre-release gate
@@ -93,15 +80,6 @@ version-guard check. This is intentionally narrow:
 
 ## Troubleshooting
 
-- **"Release tag (X) does not match pyproject.toml [project.version] (Y)"** —
-  the tag-guard step caught a mismatch. Resolve by either:
-  1. Bumping `[project.version]` in a follow-up PR and re-cutting the tag, or
-  2. Deleting the GitHub release + tag and recreating with the matching tag.
-
-  Do NOT edit the tag without bumping `[project.version]` to match — the next
-  release will have the same problem and the released artifact will disagree
-  with `main`'s `pyproject.toml`.
-
 - **"Effective tag 'X' is not strict SemVer 2.0"** — the tag doesn't match
   the guard's regex (`MAJOR.MINOR.PATCH` with optional dot-separated
   `-prerelease` and `+build` identifiers per SemVer §9/§10; no leading zeros
@@ -118,7 +96,7 @@ version-guard check. This is intentionally narrow:
   > for every release.
 
 - **OIDC token exchange fails on `uv publish`** — usually a setup mismatch.
-  Verify on PyPI: Owner = `<org>`, Repository = `semvertag`, Workflow
+  Verify on PyPI: Owner = `modern-python`, Repository = `semvertag`, Workflow
   filename = `publish.yml`, Environment name = `pypi`. All four MUST match
   the workflow byte-equal. If any differs, the OIDC subject claim won't
   match PyPI's binding and the token exchange is refused.
@@ -131,17 +109,9 @@ version-guard check. This is intentionally narrow:
 - **`uv publish` fails partway (e.g. sdist uploaded, wheel did not)** — PyPI
   rejects re-upload of an already-uploaded filename, even byte-identical.
   A `workflow_dispatch` retry of the same tag will hit HTTP 400 on the
-  already-present sdist. Recovery: bump `[project.version]` to the next
-  patch number (e.g. `1.0.0` → `1.0.1`) in a fresh release-prep PR and
-  re-cut the tag. Do NOT delete the partial PyPI artifact — PyPI does not
-  permit re-uploading the same version even after deletion.
-
-- **First-release `[project.version] = "0"`** — the project ships with a
-  placeholder version `"0"`. No SemVer-2.0 tag can match `"0"` (the
-  guard's regex requires `MAJOR.MINOR.PATCH`), so the publish workflow
-  refuses every release against the placeholder. The release-prep PR for
-  the first release MUST bump `[project.version]` to a real SemVer value
-  (e.g. `0.1.0`).
+  already-present sdist. Recovery: cut a new patch release (e.g. `1.0.0` →
+  `1.0.1`) and re-tag. Do NOT delete the partial PyPI artifact — PyPI does
+  not permit re-uploading the same version even after deletion.
 
 - **"Trusted publisher not configured"** from PyPI — the one-time setup at
   the top of this document hasn't been done, or the PyPI project doesn't

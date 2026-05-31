@@ -26,7 +26,6 @@ _PROJECT_ID_INT_CI: typing.Final = 777
 @pytest.mark.usefixtures("clean_settings_env")
 def test_uses_defaults_when_no_env_set() -> None:
     settings: typing.Final = Settings()
-    assert settings.provider == "gitlab"
     assert settings.strategy == "branch-prefix"
     assert settings.default_branch is None
     assert settings.request_timeout == _TIMEOUT_DEFAULT_VALUE

@@ -7,15 +7,13 @@ from semvertag.strategies.conventional_commits import ConventionalCommitsStrateg
 
 
 _StrategyName = typing.Literal["branch-prefix", "conventional-commits"]
-_ProviderName = typing.Literal["gitlab", "github", "bitbucket"]
 
 
 def _settings(
     *,
     strategy: _StrategyName = "branch-prefix",
-    provider: _ProviderName = "gitlab",
 ) -> Settings:
-    return Settings(project_id=999, strategy=strategy, provider=provider)
+    return Settings(project_id=999, strategy=strategy)
 
 
 def test_container_resolves_branch_prefix_strategy_by_default() -> None:

@@ -21,7 +21,7 @@ branch via `rules:`.
 
 ```yaml
 include:
-  - component: $CI_SERVER_FQDN/<org>/semvertag/semvertag@v1
+  - component: $CI_SERVER_FQDN/modern-python/semvertag/semvertag@v0.1.0
     inputs:
       strategy: branch-prefix
 
@@ -33,9 +33,6 @@ semvertag:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 ```
 
-> Replace `<org>` with the actual GitLab namespace (group or user) that
-> owns the published Catalog component. The literal string `<org>`
-> does not resolve and the pipeline fails at `include:` time.
 
 The component runs against the latest commit on the default branch and,
 if a bump is warranted by the configured strategy, pushes a new tag to
@@ -59,11 +56,9 @@ consumers want; you can omit the `inputs:` block entirely.
 | `strategy` | no | `branch-prefix` | Bump strategy. One of: branch-prefix (default), conventional-commits. |
 
 The input names, defaults, and options are sourced from
-[`templates/semvertag.yml`](https://github.com/<org>/semvertag/blob/main/templates/semvertag.yml) —
+[`templates/semvertag.yml`](https://github.com/modern-python/semvertag/blob/main/templates/semvertag.yml) —
 if this table ever drifts from the descriptor, the descriptor wins.
 
-> The `<org>` in the source link above is a literal placeholder; the
-> rendered URL will 404 until the project resolves it post-publish.
 
 ## Required permissions
 
@@ -138,14 +133,11 @@ Set the strategy per project:
 
 ```yaml
 include:
-  - component: $CI_SERVER_FQDN/<org>/semvertag/semvertag@v1
+  - component: $CI_SERVER_FQDN/modern-python/semvertag/semvertag@v0.1.0
     inputs:
       strategy: conventional-commits
 ```
 
-> The same `<org>` placeholder rule applies: replace with the actual
-> GitLab namespace that owns the published Catalog component, or
-> `include:` resolution fails at pipeline-load time.
 
 ## Troubleshooting
 
@@ -166,10 +158,3 @@ include:
   auto-derived from `CI_SERVER_FQDN`. Set
   `SEMVERTAG_GITLAB__ENDPOINT` as a project-level CI/CD variable
   pointing to the instance's API root.
-
-- **`include: - component: $CI_SERVER_FQDN/<org>/semvertag/semvertag@v1` fails to resolve**
-  — `<org>` is a literal placeholder in this documentation. Replace
-  it with the actual GitLab namespace (group or user) that owns the
-  published Catalog component. The Catalog listing's `include:` line
-  will show the resolved namespace once the first release is
-  published.

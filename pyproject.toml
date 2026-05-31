@@ -1,6 +1,6 @@
 [project]
 name = "semvertag"
-description = "Auto-tag GitLab/GitHub/Bitbucket repos with semantic version tags — one tool, two strategies."
+description = "Auto-tag GitLab repos with semantic version tags — one tool, two strategies."
 authors = [{ name = "Artur Shiriev", email = "me@shiriev.ru" }]
 requires-python = ">=3.10,<4"
 license = "MIT"
@@ -29,7 +29,7 @@ dependencies = [
 semvertag = "semvertag.__main__:main"
 
 [project.urls]
-repository = "https://github.com/<org>/semvertag"
+repository = "https://github.com/modern-python/semvertag"
 docs = "https://semvertag.readthedocs.io"
 
 [build-system]

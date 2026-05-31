@@ -64,6 +64,3 @@ relevant provider's component / action. See:
 
 - [GitLab CI](../providers/gitlab.md) — set
   `strategy: conventional-commits` on the `include: - component:` block.
-- [GitHub Actions](../providers/github.md) — set
-  `strategy: conventional-commits` on the marketplace action's `with:`
-  block.

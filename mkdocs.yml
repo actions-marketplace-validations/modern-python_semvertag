@@ -1,5 +1,5 @@
 site_name: semvertag
-repo_url: https://github.com/<org>/semvertag
+repo_url: https://github.com/modern-python/semvertag
 docs_dir: docs
 edit_uri: edit/main/docs/
 exclude_docs: |
@@ -7,7 +7,6 @@ exclude_docs: |
 nav:
   - Quick Start: index.md
   - Providers:
-    - GitHub Actions: providers/github.md
     - GitLab CI: providers/gitlab.md
   - Strategies:
     - Branch prefix: strategies/branch-prefix.md
@@ -68,5 +67,5 @@ markdown_extensions:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/<org>/semvertag
+      link: https://github.com/modern-python/semvertag
       name: GitHub

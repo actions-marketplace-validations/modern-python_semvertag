@@ -14,4 +14,4 @@ semvertag:
   before_script:
     - pip install --quiet --no-cache-dir 'uv>=0.4,<1'
   script:
-    - uvx 'semvertag>=1,<2' tag
+    - uvx 'semvertag>=0.1,<1' tag

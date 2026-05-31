@@ -78,7 +78,7 @@ jobs:
           fi
 
       - id: tag_guard
-        name: Verify release tag matches [project.version]
+        name: Resolve and validate release tag
         run: |
           # Resolve effective tag from the triggering event.
           if [ "${{ github.event_name }}" = "release" ]; then
@@ -93,32 +93,23 @@ jobs:
           # Strip a single leading 'v' (the SemVer-style 'v1.0.0' tag prefix).
           EFFECTIVE_TAG="${EFFECTIVE_TAG#v}"
 
-          # Re-assert strict SemVer 2.0 form post-strip. The MAJOR/MINOR/PATCH
-          # groups enforce SemVer §2 no-leading-zero rule. The pre-release
-          # group enforces SemVer §9: dot-separated identifiers must be either
-          # a non-leading-zero numeric or an alphanumeric containing at least
-          # one non-digit. The build-metadata group enforces SemVer §10:
-          # dot-separated identifiers of [0-9A-Za-z-]+. A loose [0-9A-Za-z.-]+
-          # would accept '1.0.0-01' (leading-zero numeric) and '1.0.0-..foo'
-          # (empty identifiers), both forbidden by the spec.
+          # Re-assert strict SemVer 2.0 form post-strip. Catches typos like
+          # 'v1.0' or empty pre-release identifiers before the tag reaches
+          # PyPI. See SemVer 2.0 §2 (no leading zeros), §9 (pre-release
+          # identifier rules), §10 (build-metadata identifier rules).
           if ! echo "$EFFECTIVE_TAG" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-((0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9A-Za-z-]*)(\.(0|[1-9][0-9]*|[0-9]*[a-zA-Z-][0-9A-Za-z-]*))*))?(\+([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?$'; then
             echo "::error::Effective tag '${EFFECTIVE_TAG}' is not strict SemVer 2.0 (expected MAJOR.MINOR.PATCH with optional dot-separated -prerelease and +build identifiers; no leading zeros in numeric identifiers; no empty identifiers)."
             exit 1
           fi
-
-          # Read [project.version] from pyproject.toml (stdlib-only; tomllib is
-          # stdlib on Python >= 3.11 and the setup-uv step above installs 3.13).
-          # --no-project skips reading the project's pyproject.toml as a uv project
-          # (avoids resolving + syncing dependencies just to read the version).
-          PROJECT_VERSION=$(uv run --no-project python -c \
-            "import tomllib, pathlib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['version'])")
-
-          if [ "$EFFECTIVE_TAG" != "$PROJECT_VERSION" ]; then
-            echo "::error::Release tag (${EFFECTIVE_TAG}) does not match pyproject.toml [project.version] (${PROJECT_VERSION}). Refusing to publish. Bump [project.version] in pyproject.toml and tag matching, or amend the release tag."
-            exit 1
-          fi
-          echo "::notice::tag ${EFFECTIVE_TAG} matches [project.version] ${PROJECT_VERSION} — proceeding to build + publish."
           echo "effective_tag=${EFFECTIVE_TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Inject version from tag
+        if: success()
+        # pyproject.toml ships with version = "0" as a placeholder
+        # (matches the modern-di convention). The publish workflow sets
+        # the real version from the tag at build time, so main never
+        # carries a version that requires bumping per release.
+        run: uv version "${{ steps.tag_guard.outputs.effective_tag }}"
 
       - name: Build distribution
         if: success()
