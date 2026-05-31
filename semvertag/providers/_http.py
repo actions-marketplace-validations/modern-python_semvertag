@@ -5,6 +5,8 @@ import typing
 import httpx2
 import pydantic
 
+from semvertag._errors import ProviderAPIError
+
 
 T = typing.TypeVar("T", bound=pydantic.BaseModel)
 
@@ -19,8 +21,16 @@ class HttpClient:
     status_translator: StatusTranslator
 
     def request(self, method: str, url: str, *, schema: type[T], **kwargs: typing.Any) -> T:  # noqa: ANN401
-        response = self.client.request(method, url, headers=self.auth_headers(), **kwargs)
-        payload = response.json()
+        try:
+            response = self.client.request(method, url, headers=self.auth_headers(), **kwargs)
+        except httpx2.RequestError as exc:
+            msg = f"request failed: {type(exc).__name__}"
+            raise ProviderAPIError(msg) from exc
+        try:
+            payload = response.json()
+        except (ValueError, httpx2.DecodingError) as exc:
+            msg = "malformed JSON in response body"
+            raise ProviderAPIError(msg) from exc
         return schema.model_validate(payload)
 
 
