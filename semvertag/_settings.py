@@ -88,60 +88,22 @@ class Settings(pydantic_settings.BaseSettings):
         return value
 
 
-def apply_cli_overlay(
-    settings: Settings,
-    overrides: dict[str, tuple[typing.Any, str]],
-) -> Settings:
-    update_top, nested_updates = _split_overrides(settings, overrides)
-    for head, leaf_updates in nested_updates.items():
-        update_top[head] = _revalidate_nested(settings, head, leaf_updates)
-
-    copied: typing.Final = settings.model_copy(update=update_top, deep=True)
-    raw_data: typing.Final = {name: getattr(copied, name) for name in type(copied).model_fields}
-    new_settings: typing.Final = type(copied).model_validate(raw_data)
-    return new_settings
-
-
-def _split_overrides(
-    settings: Settings,
-    overrides: dict[str, tuple[typing.Any, str]],
-) -> tuple[dict[str, typing.Any], dict[str, dict[str, typing.Any]]]:
-    update_top: dict[str, typing.Any] = {}
+def apply_cli_overlay(settings: Settings, overrides: dict[str, typing.Any]) -> Settings:
+    top_updates: dict[str, typing.Any] = {}
     nested_updates: dict[str, dict[str, typing.Any]] = {}
-    settings_fields: typing.Final = type(settings).model_fields
-
-    for dotted_key, (value, _flag_detail) in overrides.items():
-        if "." in dotted_key:
-            head, _, leaf = dotted_key.partition(".")
-            if "." in leaf:
-                msg = f"CLI overlay key '{dotted_key}' exceeds nesting depth 2."
-                raise ValueError(msg)
-            if head not in settings_fields:
-                msg = f"Unknown CLI overlay target: {head!r}."
-                raise ValueError(msg)
+    for dotted_key, value in overrides.items():
+        head, _, leaf = dotted_key.partition(".")
+        if "." in leaf:
+            msg = f"CLI overlay key '{dotted_key}' exceeds nesting depth 2."
+            raise ValueError(msg)
+        if leaf:
             nested_updates.setdefault(head, {})[leaf] = value
         else:
-            if dotted_key not in settings_fields:
-                msg = f"Unknown CLI overlay target: {dotted_key!r}."
-                raise ValueError(msg)
-            update_top[dotted_key] = value
-    return update_top, nested_updates
-
-
-def _revalidate_nested(
-    settings: Settings,
-    head: str,
-    leaf_updates: dict[str, typing.Any],
-) -> pydantic.BaseModel:
-    nested: typing.Final = getattr(settings, head)
-    if not isinstance(nested, pydantic.BaseModel):
-        msg = f"CLI overlay target '{head}' is not a pydantic BaseModel."
-        raise TypeError(msg)
-    nested_fields: typing.Final = type(nested).model_fields
-    for leaf in leaf_updates:
-        if leaf not in nested_fields:
-            msg = f"Unknown CLI overlay target: {head}.{leaf!r}."
-            raise ValueError(msg)
-    nested_data: typing.Final = {name: getattr(nested, name) for name in nested_fields}
-    nested_data.update(leaf_updates)
-    return type(nested).model_validate(nested_data)
+            top_updates[head] = value
+    for head, leaves in nested_updates.items():
+        top_updates[head] = getattr(settings, head).model_copy(update=leaves)
+    copied = settings.model_copy(update=top_updates)
+    # Manually run validators on overridden fields. Only request_timeout has a validator.
+    if "request_timeout" in top_updates:
+        copied = copied.model_copy(update={"request_timeout": copied._clamp_request_timeout(copied.request_timeout)})  # noqa: SLF001
+    return copied

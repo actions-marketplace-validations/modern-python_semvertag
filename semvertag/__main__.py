@@ -46,22 +46,22 @@ def _collect_overrides(  # noqa: PLR0913
     default_branch: str | None,
     gitlab_endpoint: str | None,
     request_timeout: float | None,
-) -> dict[str, tuple[typing.Any, str]]:
-    overrides: dict[str, tuple[typing.Any, str]] = {}
+) -> dict[str, typing.Any]:
+    overrides: dict[str, typing.Any] = {}
     if project_id is not None:
-        overrides["project_id"] = (project_id, "--project-id")
+        overrides["project_id"] = project_id
     if strategy is not None:
-        overrides["strategy"] = (strategy, "--strategy")
+        overrides["strategy"] = strategy
     if provider is not None:
-        overrides["provider"] = (provider, "--provider")
+        overrides["provider"] = provider
     if token is not None:
-        overrides["gitlab.token"] = (pydantic.SecretStr(token), "--token")
+        overrides["gitlab.token"] = pydantic.SecretStr(token)
     if default_branch is not None:
-        overrides["default_branch"] = (default_branch, "--default-branch")
+        overrides["default_branch"] = default_branch
     if gitlab_endpoint is not None:
-        overrides["gitlab.endpoint"] = (gitlab_endpoint, "--gitlab-endpoint")
+        overrides["gitlab.endpoint"] = gitlab_endpoint
     if request_timeout is not None:
-        overrides["request_timeout"] = (request_timeout, "--request-timeout")
+        overrides["request_timeout"] = request_timeout
     return overrides
 
 
