@@ -103,7 +103,6 @@ def apply_cli_overlay(settings: Settings, overrides: dict[str, typing.Any]) -> S
     for head, leaves in nested_updates.items():
         top_updates[head] = getattr(settings, head).model_copy(update=leaves)
     copied = settings.model_copy(update=top_updates)
-    # Manually run validators on overridden fields. Only request_timeout has a validator.
-    if "request_timeout" in top_updates:
-        copied = copied.model_copy(update={"request_timeout": copied._clamp_request_timeout(copied.request_timeout)})  # noqa: SLF001
-    return copied
+    # Re-validate to trigger field validators (e.g. _clamp_request_timeout).
+    # getattr (not model_dump) preserves live SecretStr values.
+    return type(settings).model_validate({name: getattr(copied, name) for name in type(copied).model_fields})
