@@ -38,6 +38,11 @@ class _ProjectResponse(pydantic.BaseModel):
     default_branch: str | None
 
 
+class _CommitItem(pydantic.BaseModel):
+    id: str
+    message: str
+
+
 # RFC 8288 Link header: <uri-reference>;param=value;param="value";...
 _LINK_ENTRY_RE: typing.Final = re.compile(
     r"<\s*(?P<url>[^>]*?)\s*>(?P<params>(?:\s*;\s*[^,;]+)*)",
@@ -64,33 +69,17 @@ class GitLabProvider:
 
     def get_latest_commit_on_default_branch(self) -> Commit:
         default_branch: typing.Final = self.get_default_branch()
-        url: typing.Final = self._url(f"{_API_PREFIX}/{self.project_id}/repository/commits")
-        try:
-            response = self.client.get(  # ty: ignore[unresolved-attribute]
-                url,
-                params={"ref_name": default_branch, "per_page": 1},
-                headers=self._auth_headers(),
-            )
-        except httpx2.RequestError as exc:
-            raise ProviderAPIError(_request_failed_message(exc)) from exc
-        _translate_status(response.status_code, self.project_id)
-        try:
-            items = response.json()
-        except (ValueError, httpx2.DecodingError) as exc:
-            msg = "GitLab commits response malformed. Check SEMVERTAG_GITLAB__ENDPOINT and project ID."
-            raise ProviderAPIError(msg) from exc
-        if not isinstance(items, list):
-            msg = "GitLab commits response malformed. Check SEMVERTAG_GITLAB__ENDPOINT and project ID."
-            raise ProviderAPIError(msg)
+        items = self.http.request_many(
+            "GET",
+            self._url(f"{_API_PREFIX}/{self.project_id}/repository/commits"),
+            schema=_CommitItem,
+            params={"ref_name": default_branch, "per_page": 1},
+        )
         if not items:
             msg = f"No commits on default branch '{default_branch}'. The branch appears empty."
             raise ProviderAPIError(msg)
-        try:
-            head = items[0]
-            return Commit(sha=head["id"], message=head["message"])
-        except (KeyError, TypeError) as exc:
-            msg = "GitLab commit object missing expected keys. Check SEMVERTAG_GITLAB__ENDPOINT and project ID."
-            raise ProviderAPIError(msg) from exc
+        head = items[0]
+        return Commit(sha=head.id, message=head.message)
 
     def list_tags(self) -> list[Tag]:
         tags: list[Tag] = []

@@ -165,7 +165,7 @@ def test_get_latest_commit_raises_provider_api_error_when_body_not_json() -> Non
         ("GET", _COMMITS_PATH): httpx2.Response(200, text="not json"),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="commits response malformed"):
+    with client, pytest.raises(ProviderAPIError, match="malformed JSON"):
         provider.get_latest_commit_on_default_branch()
 
 
@@ -174,7 +174,7 @@ def test_get_latest_commit_raises_provider_api_error_when_body_not_list() -> Non
         ("GET", _COMMITS_PATH): httpx2.Response(200, json={"id": "x", "message": "y"}),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="commits response malformed"):
+    with client, pytest.raises(ProviderAPIError, match="expected list"):
         provider.get_latest_commit_on_default_branch()
 
 
@@ -183,7 +183,7 @@ def test_get_latest_commit_raises_provider_api_error_when_commit_object_missing_
         ("GET", _COMMITS_PATH): httpx2.Response(200, json=[{"short_id": "x"}]),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="commit object missing"):
+    with client, pytest.raises(ProviderAPIError, match="response shape"):
         provider.get_latest_commit_on_default_branch()
 
 
