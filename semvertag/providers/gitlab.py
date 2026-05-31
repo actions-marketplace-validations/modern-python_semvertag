@@ -43,6 +43,15 @@ class _CommitItem(pydantic.BaseModel):
     message: str
 
 
+class _TagCommit(pydantic.BaseModel):
+    id: str
+
+
+class _TagItem(pydantic.BaseModel):
+    name: str
+    commit: _TagCommit
+
+
 # RFC 8288 Link header: <uri-reference>;param=value;param="value";...
 _LINK_ENTRY_RE: typing.Final = re.compile(
     r"<\s*(?P<url>[^>]*?)\s*>(?P<params>(?:\s*;\s*[^,;]+)*)",
@@ -87,24 +96,10 @@ class GitLabProvider:
         url: str = base_url
         params: dict[str, typing.Any] | None = {"per_page": _TAGS_PER_PAGE, "page": 1}
         for _ in range(_MAX_TAG_PAGES):
-            try:
-                response = self.client.get(url, params=params, headers=self._auth_headers())  # ty: ignore[unresolved-attribute]
-            except httpx2.RequestError as exc:
-                raise ProviderAPIError(_request_failed_message(exc)) from exc
+            response = self.http.request_raw("GET", url, params=params)
             _translate_status(response.status_code, self.project_id)
-            try:
-                payload = response.json()
-            except (ValueError, httpx2.DecodingError) as exc:
-                msg = "GitLab tags response malformed. Check SEMVERTAG_GITLAB__ENDPOINT and project ID."
-                raise ProviderAPIError(msg) from exc
-            if not isinstance(payload, list):
-                msg = "GitLab tags response malformed. Check SEMVERTAG_GITLAB__ENDPOINT and project ID."
-                raise ProviderAPIError(msg)
-            try:
-                tags.extend(Tag(name=item["name"], commit_sha=item["commit"]["id"]) for item in payload)
-            except (KeyError, TypeError) as exc:
-                msg = "GitLab tag object missing expected keys. Check SEMVERTAG_GITLAB__ENDPOINT and project ID."
-                raise ProviderAPIError(msg) from exc
+            items = _validate_tag_list(response)
+            tags.extend(Tag(name=item.name, commit_sha=item.commit.id) for item in items)
             next_url = _next_page_url(response, current_url=url)
             if next_url is None:
                 return tags
@@ -315,6 +310,22 @@ def _next_page_url(response: httpx2.Response, current_url: str) -> str | None:
         if "next" in _parse_rel_values(match.group("params")):
             return urllib.parse.urljoin(current_url, url_part)
     return None
+
+
+def _validate_tag_list(response: httpx2.Response) -> list[_TagItem]:
+    try:
+        payload = response.json()
+    except (ValueError, httpx2.DecodingError) as exc:
+        msg = "GitLab tags response malformed JSON."
+        raise ProviderAPIError(msg) from exc
+    if not isinstance(payload, list):
+        msg = "GitLab tags response shape invalid: expected list."
+        raise ProviderAPIError(msg)
+    try:
+        return [_TagItem.model_validate(item) for item in payload]
+    except pydantic.ValidationError as exc:
+        msg = f"GitLab tags response shape invalid: {exc}"
+        raise ProviderAPIError(msg) from exc
 
 
 def _evaluate_scopes_payload(response: httpx2.Response) -> CheckResult:

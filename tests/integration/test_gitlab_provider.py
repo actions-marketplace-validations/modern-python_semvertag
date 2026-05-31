@@ -275,7 +275,7 @@ def test_list_tags_raises_provider_api_error_when_body_not_json() -> None:
         ("GET", _TAGS_PATH): httpx2.Response(200, text="not json"),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="tags response malformed"):
+    with client, pytest.raises(ProviderAPIError, match="malformed JSON"):
         provider.list_tags()
 
 
@@ -284,7 +284,7 @@ def test_list_tags_raises_provider_api_error_when_body_not_list() -> None:
         ("GET", _TAGS_PATH): httpx2.Response(200, json={"unexpected": "shape"}),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="tags response malformed"):
+    with client, pytest.raises(ProviderAPIError, match="expected list"):
         provider.list_tags()
 
 
@@ -293,7 +293,7 @@ def test_list_tags_raises_provider_api_error_when_tag_object_missing_keys() -> N
         ("GET", _TAGS_PATH): httpx2.Response(200, json=[{"name": "v1"}]),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="tag object missing"):
+    with client, pytest.raises(ProviderAPIError, match="shape invalid"):
         provider.list_tags()
 
 
