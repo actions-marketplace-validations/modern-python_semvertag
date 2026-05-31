@@ -8,13 +8,11 @@ import pydantic
 
 from semvertag._errors import AuthError, ConfigError, ProviderAPIError
 from semvertag._settings import GitLabConfig
-from semvertag._types import CheckResult, Commit, Tag
+from semvertag._types import Commit, Tag
 from semvertag.providers._http import HttpClient
 
 
 _API_PREFIX: typing.Final = "/api/v4/projects"
-_USER_PATH: typing.Final = "/api/v4/user"
-_TOKEN_INTROSPECTION_PATH: typing.Final = "/api/v4/personal_access_tokens/self"
 _PRIVATE_TOKEN_HEADER: typing.Final = "PRIVATE-TOKEN"
 _TAGS_PER_PAGE: typing.Final = 100
 _MAX_TAG_PAGES: typing.Final = 100
@@ -31,7 +29,6 @@ _HTTP_SERVER_ERROR_MIN: typing.Final = 500
 _HTTP_SERVER_ERROR_MAX: typing.Final = 600
 
 _TAG_EXISTS_FRAGMENT: typing.Final = "already exists"
-_API_SCOPE: typing.Final = "api"
 
 
 class _ProjectResponse(pydantic.BaseModel):
@@ -138,132 +135,8 @@ class GitLabProvider:
             raise ConfigError(msg)
         _translate_status(response.status_code, self.project_id)
 
-    def check_token(self) -> CheckResult:
-        url: typing.Final = self._url(_USER_PATH)
-        response, error_type = self._safe_get(url)
-        if response is None:
-            return CheckResult(
-                name="token",
-                status="failed",
-                cause=f"GitLab unreachable ({error_type}). Check SEMVERTAG_GITLAB__ENDPOINT.",
-            )
-        if response.status_code == _HTTP_OK:
-            return CheckResult(name="token", status="passed", cause="Token recognized by GitLab API.")
-        if response.status_code == _HTTP_UNAUTHORIZED:
-            return CheckResult(
-                name="token",
-                status="failed",
-                cause="Token rejected by GitLab. Verify SEMVERTAG_TOKEN is valid.",
-            )
-        if response.status_code == _HTTP_FORBIDDEN:
-            return CheckResult(
-                name="token",
-                status="failed",
-                cause="Token blocked or lacks permission on /api/v4/user. Verify SEMVERTAG_TOKEN is not blocked.",
-            )
-        return CheckResult(
-            name="token",
-            status="failed",
-            cause=f"Unexpected GitLab response: {response.status_code}.",
-        )
-
-    def check_scopes(self) -> CheckResult:
-        url: typing.Final = self._url(_TOKEN_INTROSPECTION_PATH)
-        response, error_type = self._safe_get(url)
-        if response is None:
-            cause = f"GitLab unreachable ({error_type}). Check SEMVERTAG_GITLAB__ENDPOINT."
-        elif response.status_code == _HTTP_OK:
-            return _evaluate_scopes_payload(response)
-        elif response.status_code in {_HTTP_UNAUTHORIZED, _HTTP_FORBIDDEN}:
-            cause = "Token missing 'api' scope. Add it to the SEMVERTAG_TOKEN scopes on GitLab."
-        elif response.status_code == _HTTP_NOT_FOUND:
-            cause = "GitLab version too old (< 15.0): missing /personal_access_tokens/self endpoint."
-        else:
-            cause = f"Unexpected GitLab response: {response.status_code}."
-        return CheckResult(name="scopes", status="failed", cause=cause)
-
-    def check_project_access(self) -> CheckResult:
-        url: typing.Final = self._url(f"{_API_PREFIX}/{self.project_id}")
-        response, error_type = self._safe_get(url)
-        if response is None:
-            return CheckResult(
-                name="project_access",
-                status="failed",
-                cause=f"GitLab unreachable ({error_type}). Check SEMVERTAG_GITLAB__ENDPOINT.",
-            )
-        if response.status_code == _HTTP_OK:
-            return CheckResult(
-                name="project_access",
-                status="passed",
-                cause=f"Project visible: project_id={self.project_id}.",
-            )
-        if response.status_code == _HTTP_UNAUTHORIZED:
-            return CheckResult(
-                name="project_access",
-                status="failed",
-                cause="Token rejected by GitLab. Verify SEMVERTAG_TOKEN is valid.",
-            )
-        if response.status_code == _HTTP_FORBIDDEN:
-            return CheckResult(
-                name="project_access",
-                status="failed",
-                cause=f"Token has no access to project_id={self.project_id}.",
-            )
-        if response.status_code == _HTTP_NOT_FOUND:
-            return CheckResult(
-                name="project_access",
-                status="failed",
-                cause=f"GitLab project not found: project_id={self.project_id}. Verify CI_PROJECT_ID or --project-id.",
-            )
-        return CheckResult(
-            name="project_access",
-            status="failed",
-            cause=f"Unexpected GitLab response: {response.status_code}.",
-        )
-
-    def check_protected_tags(self) -> CheckResult:
-        url: typing.Final = self._url(f"{_API_PREFIX}/{self.project_id}/protected_tags")
-        response, error_type = self._safe_get(url)
-        if response is None:
-            return CheckResult(
-                name="protected_tags",
-                status="failed",
-                cause=f"GitLab unreachable ({error_type}). Check SEMVERTAG_GITLAB__ENDPOINT.",
-            )
-        if response.status_code == _HTTP_OK:
-            return CheckResult(
-                name="protected_tags",
-                status="passed",
-                cause="Protected-tag configuration is readable.",
-            )
-        if response.status_code in {_HTTP_UNAUTHORIZED, _HTTP_FORBIDDEN}:
-            return CheckResult(
-                name="protected_tags",
-                status="failed",
-                cause="Token cannot read protected_tags. Add 'read_repository' or 'api' to scopes.",
-            )
-        if response.status_code == _HTTP_NOT_FOUND:
-            return CheckResult(
-                name="protected_tags",
-                status="failed",
-                cause=f"GitLab project not found: project_id={self.project_id}. Verify CI_PROJECT_ID or --project-id.",
-            )
-        return CheckResult(
-            name="protected_tags",
-            status="failed",
-            cause=f"Unexpected GitLab response: {response.status_code}.",
-        )
-
     def _url(self, path: str) -> str:
         return f"{self.config.endpoint.rstrip('/')}{path}"
-
-    def _safe_get(self, url: str) -> tuple[httpx2.Response | None, str | None]:
-        try:
-            return self.http.request_raw("GET", url), None
-        except ProviderAPIError as exc:
-            cause = exc.__cause__
-            error_kind = type(cause).__name__ if isinstance(cause, httpx2.RequestError) else "RequestError"
-            return None, error_kind
 
 
 def gitlab_auth_headers(token: pydantic.SecretStr) -> dict[str, str]:
@@ -325,29 +198,6 @@ def _validate_tag_list(response: httpx2.Response) -> list[_TagItem]:
     except pydantic.ValidationError as exc:
         msg = f"GitLab tags response shape invalid: {exc}"
         raise ProviderAPIError(msg) from exc
-
-
-def _evaluate_scopes_payload(response: httpx2.Response) -> CheckResult:
-    try:
-        payload = response.json()
-    except (ValueError, httpx2.DecodingError):
-        payload = None
-    if not isinstance(payload, dict):
-        return CheckResult(
-            name="scopes",
-            status="failed",
-            cause="GitLab token introspection response malformed. Check SEMVERTAG_GITLAB__ENDPOINT.",
-        )
-    scopes = payload.get("scopes", [])
-    if not isinstance(scopes, list):
-        scopes = []
-    if _API_SCOPE in scopes:
-        return CheckResult(name="scopes", status="passed", cause="Token carries 'api' scope.")
-    return CheckResult(
-        name="scopes",
-        status="failed",
-        cause="Token missing 'api' scope. Add it to the SEMVERTAG_TOKEN scopes on GitLab.",
-    )
 
 
 def _parse_rel_values(params_blob: str) -> set[str]:

@@ -40,7 +40,7 @@ See `Justfile` for the canonical commands. Quick reference:
 - `just lint-ci` — eof-fixer, ruff format check, ruff check, ty check
 - `just test` — pytest with coverage
 - `just test-branch` — pytest with branch coverage
-- `just test-branch-strategies` / `just test-cc-strategies` / `just test-doctor`
+- `just test-branch-strategies` / `just test-cc-strategies`
   — 100% branch coverage gates on specific modules
 - `mkdocs build --strict` — docs build gate
 
