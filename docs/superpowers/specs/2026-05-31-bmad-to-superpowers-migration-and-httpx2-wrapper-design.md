@@ -100,8 +100,14 @@ care about doc moves, but verify rather than assume.
 ### Goal
 
 Erase the 6-step defensive dance from every method in `gitlab.py` so call
-sites read like "GET this path → here's a dict", with status / JSON / shape
-errors handled once in one place.
+sites read like "GET this path → here's a typed object", with status / JSON
+/ shape errors handled once in one place. The wrapper takes a Pydantic
+schema per call and returns a validated, typed instance; raw dict/list
+handling and `KeyError`/`TypeError` field-extraction guards disappear from
+provider code.
+
+Pydantic is already a transitive dependency via `pydantic-settings`; no new
+package required.
 
 ### Shape — composition, not inheritance
 
@@ -121,27 +127,56 @@ The provider stays a flat dataclass with no base class. Reasons:
 ### `HttpClient` API (approximate)
 
 ```python
+T = TypeVar("T", bound=pydantic.BaseModel)
+
 class HttpClient:
     client: httpx2.Client
     auth_headers: Callable[[], dict[str, str]]
     status_translator: Callable[[int], None]  # raises typed errors; no-op on success
 
-    def request_dict(self, method: str, url: str, **kwargs) -> dict: ...
-    def request_list(self, method: str, url: str, **kwargs) -> list: ...
+    def request(self, method: str, url: str, *, schema: type[T], **kwargs) -> T: ...
+    def request_many(self, method: str, url: str, *, schema: type[T], **kwargs) -> list[T]: ...
     def request_raw(self, method: str, url: str, **kwargs) -> httpx2.Response: ...
 ```
 
 Final API surface is decided at planning time; treat this as illustrative.
 
-- `request_dict` / `request_list` run the request with auth headers, catch
-  `httpx2.RequestError` → `ProviderAPIError`, call `status_translator`,
-  decode JSON, validate shape, return.
+- `request` runs the request with auth headers, catches `httpx2.RequestError`
+  → `ProviderAPIError`, calls `status_translator`, decodes JSON, validates
+  via `schema.model_validate(payload)`, returns the typed instance. Pydantic
+  validation errors → `ProviderAPIError` with the field-level message
+  preserved.
+- `request_many` is the same but expects a JSON list and returns
+  `list[T]` (used by `list_tags`). Separated from `request` because Python
+  generics make `schema=list[Model]` clunky to type-check; an explicit method
+  is clearer than overloading on the schema parameter.
 - `request_raw` is an escape hatch for `create_tag` (needs raw status for the
   "already exists" 400 branch) and `list_tags` pagination (needs the `Link`
-  header).
+  header). It applies auth headers and translates `RequestError` →
+  `ProviderAPIError`, but does **not** call `status_translator` and does
+  **not** decode the body — the caller takes responsibility for both
+  (typically by invoking the module-level translator explicitly after their
+  special-case branch).
 - `status_translator` is injected at construction — `_translate_status` keeps
   living at module level in `gitlab.py`. The wrapper never knows GitLab's
   specific error messages.
+- Status translation runs **before** body decoding, so a 401 raises `AuthError`
+  rather than trying to validate the error-body shape against the success
+  schema.
+
+### Schemas
+
+Per-endpoint Pydantic models live near the methods that use them, in
+`gitlab.py` itself (private, leading-underscore names like `_ProjectResponse`,
+`_TagItem`, `_CommitItem`). They are not shared across providers — they
+describe GitLab's response shapes, not domain concepts. Domain types
+(`Tag`, `Commit`, `CheckResult` in `semvertag/_types.py`) stay unchanged;
+the provider translates from response schema to domain type at the boundary.
+
+Use Pydantic's `extra="ignore"` (the default) — GitLab adds fields we don't
+care about and we shouldn't break on them. Use `extra="forbid"` only if a
+specific endpoint's stability matters more than forward-compatibility (none
+do today).
 
 ### What stays in `providers/gitlab.py`
 
@@ -165,10 +200,13 @@ Final API surface is decided at planning time; treat this as illustrative.
 
 ### Expected delta
 
-- `gitlab.py`: ~380 LOC → ~200 LOC (rough estimate, not a hard gate).
+- `gitlab.py`: ~380 LOC → ~180 LOC estimated (schemas + their definitions
+  add some LOC, but the elimination of both the shape-validation layer AND
+  the field-extraction layer wins back more). Not a hard gate.
 - Tests stay structurally similar; per-method tests get shorter because
-  malformed-JSON and `RequestError` cases live in one shared `HttpClient` test
-  file.
+  malformed-JSON, `RequestError`, missing-field, and wrong-field-type cases
+  all live in one shared `HttpClient` test file. The per-method tests focus
+  on URL construction, schema choice, and domain translation.
 - `ioc.py`: one new node for `HttpClient`, GitLab group field renames
   `client` → `http`.
 
@@ -192,13 +230,25 @@ Spawn a worktree (`using-git-worktrees` skill). Inside the worktree:
 
 1. **`HttpClient` red → green, alone.** Write
    `tests/test_providers/test_http_client.py` covering:
-   - Happy-path dict.
-   - Happy-path list.
-   - `RequestError` → `ProviderAPIError`.
-   - Malformed JSON → `ProviderAPIError`.
-   - Wrong shape (list when dict expected) → `ProviderAPIError`.
-   - `status_translator` hook fires before JSON decode (so a 401 raises
-     `AuthError` rather than trying to decode the error body).
+   - `request`: happy path returns validated schema instance.
+   - `request_many`: happy path returns `list[schema]`.
+   - `request`: `RequestError` → `ProviderAPIError`.
+   - `request`: malformed JSON → `ProviderAPIError`.
+   - `request`: payload is a list when schema is single → `ProviderAPIError`.
+   - `request`: missing required field → `ProviderAPIError` carrying the
+     pydantic field path in the message.
+   - `request`: wrong field type (e.g. int where str expected) →
+     `ProviderAPIError`.
+   - `request_many`: payload is a dict when list expected →
+     `ProviderAPIError`.
+   - `status_translator` hook fires before JSON decode + schema validation
+     (so a 401 raises `AuthError` rather than trying to validate the error
+     body against the success schema).
+   - Auth-header callable is invoked per request and the result merged into
+     request headers.
+   - `request_raw` returns the `httpx2.Response` with auth headers applied
+     and `RequestError` translated, but without `status_translator` or body
+     decoding (caller takes responsibility for those).
 
    Build `HttpClient` minimally to make each test green. Commit when the new
    file is self-contained.
