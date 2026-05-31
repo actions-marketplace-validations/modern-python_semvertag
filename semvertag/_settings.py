@@ -1,5 +1,4 @@
 import logging
-import os
 import typing
 
 import pydantic
@@ -11,36 +10,9 @@ from semvertag.strategies.conventional_commits import ConventionalCommitsConfig
 
 _logger: typing.Final = logging.getLogger(__name__)
 
-_GITLAB_TOKEN_ALIASES: typing.Final[tuple[str, ...]] = (
-    "SEMVERTAG_GITLAB__TOKEN",
-    "SEMVERTAG_TOKEN",
-    "CI_JOB_TOKEN",
-    "GITLAB_TOKEN",
-)
-_GITHUB_TOKEN_ALIASES: typing.Final[tuple[str, ...]] = (
-    "SEMVERTAG_GITHUB__TOKEN",
-    "SEMVERTAG_TOKEN",
-    "GITHUB_TOKEN",
-)
-_PROJECT_ID_ALIASES: typing.Final[tuple[str, ...]] = (
-    "SEMVERTAG_PROJECT_ID",
-    "CI_PROJECT_ID",
-)
-_TOKEN_ALIASES_BY_PATH: typing.Final[dict[str, tuple[str, ...]]] = {
-    "gitlab.token": _GITLAB_TOKEN_ALIASES,
-    "github.token": _GITHUB_TOKEN_ALIASES,
-}
-_TOP_LEVEL_FIELD_ALIASES: typing.Final[dict[str, tuple[str, ...]]] = {
-    "project_id": _PROJECT_ID_ALIASES,
-}
-_PROVIDER_TO_NESTED_KEY: typing.Final[dict[str, str]] = {
-    "gitlab": "gitlab",
-    "github": "github",
-}
 _REQUEST_TIMEOUT_CEILING: typing.Final = 10.0
 _ENV_PREFIX: typing.Final = "SEMVERTAG_"
 _ENV_NESTED_DELIMITER: typing.Final = "__"
-_PROVIDER_ENV_VAR: typing.Final = _ENV_PREFIX + "PROVIDER"
 
 
 class GitLabConfig(pydantic_settings.BaseSettings):
@@ -115,42 +87,6 @@ class Settings(pydantic_settings.BaseSettings):
             )
             return _REQUEST_TIMEOUT_CEILING
         return value
-
-
-def _resolve_active_provider(data: dict[str, typing.Any]) -> str:
-    raw = data.get("provider")
-    if raw is None:
-        raw = _find_env_value((_PROVIDER_ENV_VAR,))
-    if raw is None:
-        raw = "gitlab"
-    return str(raw).lower()
-
-
-def _inject_token(data: dict[str, typing.Any], nested_key: str, aliases: tuple[str, ...]) -> None:
-    nested: typing.Final = data.setdefault(nested_key, {})
-    if not isinstance(nested, dict) or "token" in nested:
-        return
-    found: typing.Final = _find_aliased_env(aliases)
-    if found is None:
-        return
-    _matched_alias, value = found
-    nested["token"] = value
-
-
-def _find_aliased_env(candidates: tuple[str, ...]) -> tuple[str, str] | None:
-    env_lower_to_value: typing.Final = {key.lower(): value for key, value in os.environ.items()}
-    for alias in candidates:
-        value = env_lower_to_value.get(alias.lower())
-        if value:
-            return alias, value
-    return None
-
-
-def _find_env_value(candidates: tuple[str, ...]) -> str | None:
-    found: typing.Final = _find_aliased_env(candidates)
-    if found is None:
-        return None
-    return found[1]
 
 
 def apply_cli_overlay(
