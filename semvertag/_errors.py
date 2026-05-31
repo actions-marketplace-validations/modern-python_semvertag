@@ -15,6 +15,3 @@ class AuthError(SemvertagError):
 
 class ProviderAPIError(SemvertagError):
     exit_code: typing.ClassVar[int] = 4
-
-
-__all__: typing.Final = ("AuthError", "ConfigError", "ProviderAPIError", "SemvertagError")

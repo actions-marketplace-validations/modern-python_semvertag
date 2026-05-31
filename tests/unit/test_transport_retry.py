@@ -95,10 +95,6 @@ def test_module_constants_match_architecture_values() -> None:
     assert BACKOFF_BASE_SECONDS == _EXPECTED_BACKOFF_BASE_SECONDS
 
 
-def test_module_public_surface_is_only_retrying_transport() -> None:
-    assert _transport.__all__ == ("RetryingTransport",)
-
-
 def test_default_inner_is_http_transport_when_no_arg() -> None:
     transport: typing.Final = RetryingTransport()
     assert isinstance(transport._inner, httpx2.HTTPTransport)

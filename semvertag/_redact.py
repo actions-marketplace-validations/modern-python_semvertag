@@ -18,6 +18,3 @@ _TOKEN_PATTERN: typing.Final = re.compile(
 
 def redact(text: str) -> str:
     return _TOKEN_PATTERN.sub(_REDACTION, text)
-
-
-__all__: typing.Final = ("redact",)

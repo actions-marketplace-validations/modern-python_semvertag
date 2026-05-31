@@ -99,14 +99,3 @@ ALL_GROUPS: typing.Final[list[type[modern_di.Group]]] = [
 
 
 container: typing.Final = modern_di.Container(groups=ALL_GROUPS)
-
-
-__all__: typing.Final = (
-    "ALL_GROUPS",
-    "ProvidersGroup",
-    "SettingsGroup",
-    "StrategiesGroup",
-    "TransportsGroup",
-    "UseCasesGroup",
-    "container",
-)

@@ -82,6 +82,3 @@ def _parse_retry_after(value: str | None, now_epoch: float) -> float | None:
     except (TypeError, ValueError, OverflowError):
         return None
     return max(0.0, delta)
-
-
-__all__: typing.Final = ("RetryingTransport",)

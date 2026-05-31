@@ -217,6 +217,3 @@ def _same_origin(url: str, endpoint: str) -> bool:
     parsed: typing.Final = urllib.parse.urlsplit(url)
     expected: typing.Final = urllib.parse.urlsplit(endpoint)
     return parsed.scheme == expected.scheme and parsed.netloc == expected.netloc
-
-
-__all__: typing.Final = ("GitLabProvider", "gitlab_auth_headers")

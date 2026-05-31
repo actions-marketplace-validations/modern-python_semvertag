@@ -51,6 +51,3 @@ class ConventionalCommitsStrategy:
         if commit_type in self.config.patch_types:
             return Bump.PATCH
         return Bump.NONE
-
-
-__all__: typing.Final = ("ConventionalCommitsConfig", "ConventionalCommitsStrategy")

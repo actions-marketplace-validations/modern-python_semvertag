@@ -27,6 +27,3 @@ def body_lines(message: str) -> list[str]:
         if line.strip():
             collected.append(line.rstrip())
     return collected
-
-
-__all__: typing.Final = ("body_lines", "subject_line")

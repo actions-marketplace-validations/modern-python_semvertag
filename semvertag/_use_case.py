@@ -139,6 +139,3 @@ def _reason_for_no_bump(strategy_name: str) -> str:
     if strategy_name == "branch-prefix":
         return _NO_MERGE_REASON
     return _NO_CONFORMING_REASON
-
-
-__all__: typing.Final = ("SemvertagUseCase",)
