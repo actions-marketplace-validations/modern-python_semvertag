@@ -117,15 +117,11 @@ class GitLabProvider:
         raise ProviderAPIError(msg)
 
     def create_tag(self, name: str, commit_sha: str) -> None:
-        url: typing.Final = self._url(f"{_API_PREFIX}/{self.project_id}/repository/tags")
-        try:
-            response = self.client.post(  # ty: ignore[unresolved-attribute]
-                url,
-                json={"tag_name": name, "ref": commit_sha},
-                headers=self._auth_headers(),
-            )
-        except httpx2.RequestError as exc:
-            raise ProviderAPIError(_request_failed_message(exc)) from exc
+        response = self.http.request_raw(
+            "POST",
+            self._url(f"{_API_PREFIX}/{self.project_id}/repository/tags"),
+            json={"tag_name": name, "ref": commit_sha},
+        )
         if response.status_code == _HTTP_CREATED:
             return
         if response.status_code == _HTTP_BAD_REQUEST:
