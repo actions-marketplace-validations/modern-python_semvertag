@@ -9,8 +9,6 @@ from semvertag.providers._base import Provider
 from semvertag.strategies._base import BumpStrategy
 
 
-_NO_MERGE_REASON: typing.Final = "Latest commit on default branch is not a merge commit."
-_NO_CONFORMING_REASON: typing.Final = "No conforming Conventional Commits type found in commit message."
 _NO_TAGS_REASON: typing.Final = "No prior semver-conforming tags found; not seeding an initial tag in v1.0."
 _ALREADY_TAGGED_REASON: typing.Final = "Latest commit already tagged."
 
@@ -55,10 +53,10 @@ class SemvertagUseCase:
             return self._emit(
                 output=output,
                 bump=Bump.NONE,
-                status=_status_for_no_bump(self.strategy.name),
+                status=self.strategy.no_bump_status,
                 tag=None,
                 commit=commit.sha,
-                reason=_reason_for_no_bump(self.strategy.name),
+                reason=self.strategy.no_bump_reason,
             )
 
         new_version: typing.Final = _compute_new_version(latest_semver_tag, bump)
@@ -127,15 +125,3 @@ def _compute_new_version(last_tag: Tag, bump: Bump) -> str:
         return str(version.bump_patch())
     msg = f"Cannot compute new version for bump={bump!r}."
     raise ValueError(msg)
-
-
-def _status_for_no_bump(strategy_name: str) -> str:
-    if strategy_name == "branch-prefix":
-        return "no_merge_commit"
-    return "no_conforming_commit"
-
-
-def _reason_for_no_bump(strategy_name: str) -> str:
-    if strategy_name == "branch-prefix":
-        return _NO_MERGE_REASON
-    return _NO_CONFORMING_REASON

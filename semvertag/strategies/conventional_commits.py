@@ -32,6 +32,8 @@ class ConventionalCommitsConfig(pydantic.BaseModel):
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class ConventionalCommitsStrategy:
     name: typing.ClassVar[str] = "conventional-commits"
+    no_bump_status: typing.ClassVar[str] = "no_conforming_commit"
+    no_bump_reason: typing.ClassVar[str] = "No conforming Conventional Commits type found in commit message."
     config: ConventionalCommitsConfig
 
     def decide(self, commit: Commit) -> Bump:

@@ -21,6 +21,8 @@ class BranchPrefixConfig(pydantic.BaseModel):
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
 class BranchPrefixStrategy:
     name: typing.ClassVar[str] = "branch-prefix"
+    no_bump_status: typing.ClassVar[str] = "no_merge_commit"
+    no_bump_reason: typing.ClassVar[str] = "Latest commit on default branch is not a merge commit."
     config: BranchPrefixConfig
 
     def decide(self, commit: Commit) -> Bump:

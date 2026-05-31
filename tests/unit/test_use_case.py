@@ -15,6 +15,14 @@ _LATEST_TAG_NAME: typing.Final = "1.4.2"
 _EXPECTED_NEW_TAG: typing.Final = "1.5.0"
 _BRANCH_PREFIX_STRATEGY: typing.Final = "branch-prefix"
 _CONVENTIONAL_STRATEGY: typing.Final = "conventional-commits"
+_NO_BUMP_STATUS_BY_STRATEGY: typing.Final = {
+    _BRANCH_PREFIX_STRATEGY: "no_merge_commit",
+    _CONVENTIONAL_STRATEGY: "no_conforming_commit",
+}
+_NO_BUMP_REASON_BY_STRATEGY: typing.Final = {
+    _BRANCH_PREFIX_STRATEGY: "Latest commit on default branch is not a merge commit.",
+    _CONVENTIONAL_STRATEGY: "No conforming Conventional Commits type found in commit message.",
+}
 
 
 @dataclasses.dataclass(slots=True, kw_only=True)
@@ -68,6 +76,8 @@ class _StubProvider:
 @dataclasses.dataclass(slots=True, kw_only=True)
 class _StubStrategy:
     name: str
+    no_bump_status: str = "no_merge_commit"
+    no_bump_reason: str = "Latest commit on default branch is not a merge commit."
     bump_to_return: Bump
 
     def decide(self, commit: Commit) -> Bump:  # noqa: ARG002
@@ -86,7 +96,12 @@ def _make_use_case(
         commit=Commit(sha=commit_sha, message=commit_message),
         tags=tags if tags is not None else [Tag(name=_LATEST_TAG_NAME, commit_sha=_PRIOR_SHA)],
     )
-    strategy: typing.Final = _StubStrategy(name=strategy_name, bump_to_return=bump)
+    strategy: typing.Final = _StubStrategy(
+        name=strategy_name,
+        no_bump_status=_NO_BUMP_STATUS_BY_STRATEGY[strategy_name],
+        no_bump_reason=_NO_BUMP_REASON_BY_STRATEGY[strategy_name],
+        bump_to_return=bump,
+    )
     output: typing.Final = _RecordingOutput()
     use_case: typing.Final = SemvertagUseCase(
         provider=typing.cast("typing.Any", provider),
