@@ -13,19 +13,31 @@ uvx semvertag tag
 
 ## Use it in GitLab CI
 
-Include the Catalog component in your `.gitlab-ci.yml`:
+Paste this job into your `.gitlab-ci.yml`:
 
 ```yaml
-include:
-  - component: gitlab.com/modern-python/semvertag/semvertag@v0.1.0
-    inputs:
-      strategy: branch-prefix  # or: conventional-commits
+stages: [tag]
+
+semvertag:
+  stage: tag
+  image: python:3.13-slim
+  variables:
+    SEMVERTAG_STRATEGY: branch-prefix  # or: conventional-commits
+  before_script:
+    - pip install --quiet 'uv>=0.4,<1'
+  script:
+    - uvx 'semvertag>=0.1,<1' tag
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 ```
 
-The component runs `uvx semvertag tag` against your repo on the
-default branch. semvertag inspects the latest commit + tag history,
-decides the appropriate semver bump, and creates the new tag via the
-GitLab API.
+It runs `uvx semvertag tag` against your repo on the default branch.
+semvertag inspects the latest commit + tag history, decides the
+appropriate semver bump, and creates the new tag via the GitLab API.
+
+> A one-line `include: - component: …` via the GitLab CI Catalog will
+> replace this snippet once the component is published. For now, paste
+> the job inline.
 
 ## Strategies
 

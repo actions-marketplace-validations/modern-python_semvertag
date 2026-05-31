@@ -10,14 +10,20 @@ single command in your CI pipeline.
 
 ## Quick start
 
-The recommended way to use semvertag in CI is via the
-[GitLab CI Catalog component](providers/gitlab.md):
+In GitLab CI, run semvertag as a job on the default branch (see
+[GitLab CI](providers/gitlab.md) for the full snippet):
 
 ```yaml
-include:
-  - component: gitlab.com/modern-python/semvertag/semvertag@v0.1.0
-    inputs:
-      strategy: branch-prefix  # or: conventional-commits
+semvertag:
+  image: python:3.13-slim
+  variables:
+    SEMVERTAG_STRATEGY: branch-prefix  # or: conventional-commits
+  before_script:
+    - pip install --quiet 'uv>=0.4,<1'
+  script:
+    - uvx 'semvertag>=0.1,<1' tag
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 ```
 
 For local testing or one-off invocations:
@@ -27,6 +33,9 @@ SEMVERTAG_TOKEN=<your-gitlab-token> \
 SEMVERTAG_PROJECT_ID=<your-project-id> \
   uvx semvertag tag
 ```
+
+> A one-line `include: - component: …` via the GitLab CI Catalog will
+> replace the CI snippet above once the component is published.
 
 ## Strategies
 

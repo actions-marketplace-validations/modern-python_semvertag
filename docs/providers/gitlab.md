@@ -1,17 +1,20 @@
 # GitLab CI
 
-Use semvertag in GitLab CI via the published CI Catalog component. The
-component is a thin GitLab CI job template around the `semvertag` CLI —
-it pulls a lightweight Python image, installs `uv`, then runs
-`uvx semvertag tag`. No PyPI install in your repo, no maintained pipeline
-YAML beyond the snippet below.
+Use semvertag in GitLab CI via a small inline job that installs `uv`
+and runs `uvx semvertag tag`. No PyPI install in your repo, no
+maintained pipeline YAML beyond the snippet below.
+
+> **Catalog component pending.** A one-line `include: - component: …`
+> via the GitLab CI Catalog is the eventual delivery path — the
+> descriptor lives at
+> [`templates/semvertag.yml`](https://github.com/modern-python/semvertag/blob/main/templates/semvertag.yml)
+> — but the component has not yet been published to gitlab.com's
+> Catalog. Paste the job below into `.gitlab-ci.yml` until then.
 
 ## Quick Start
 
 The minimum useful pipeline: auto-tag on every push to the default
-branch. The component itself contributes a single `semvertag` job; the
-consumer attaches it to a stage and constrains it to the default
-branch via `rules:`.
+branch.
 
 > **Required setup.** Set `SEMVERTAG_TOKEN` as a project-level masked
 > CI/CD variable holding a Project Access Token (or Personal Access
@@ -20,56 +23,58 @@ branch via `rules:`.
 > (see *Token scope* below).
 
 ```yaml
-include:
-  - component: $CI_SERVER_FQDN/modern-python/semvertag/semvertag@v0.1.0
-    inputs:
-      strategy: branch-prefix
-
 stages: [tag]
 
 semvertag:
   stage: tag
+  image: python:3.13-slim
+  resource_group: semvertag
+  variables:
+    SEMVERTAG_STRATEGY: branch-prefix
+  before_script:
+    - pip install --quiet --no-cache-dir 'uv>=0.4,<1'
+  script:
+    - uvx 'semvertag>=0.1,<1' tag
   rules:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 ```
 
+The job runs against the latest commit on the default branch and, if a
+bump is warranted by the configured strategy, pushes a new tag to the
+project's `origin`. If no bump is warranted, the job exits 0 without
+pushing.
 
-The component runs against the latest commit on the default branch and,
-if a bump is warranted by the configured strategy, pushes a new tag to
-the project's `origin`. If no bump is warranted, the job exits 0
-without pushing.
+> **Concurrency default.** `resource_group: semvertag` makes GitLab
+> serialize concurrent `semvertag` jobs across pipelines on the same
+> project — back-to-back pushes will queue rather than race the
+> `create_tag` API. Drop or rename the group if you intentionally want
+> concurrent tag pushes.
 
-> **Concurrency default.** The component sets `resource_group: semvertag`
-> so GitLab serializes concurrent `semvertag` jobs across pipelines on
-> the same project — back-to-back pushes will queue rather than race
-> the `create_tag` API. Override by redeclaring the job with
-> `resource_group: null` (or a different group name) in your
-> `.gitlab-ci.yml` if you intentionally want concurrent tag pushes.
+## Strategy
 
-## Inputs
+Set `SEMVERTAG_STRATEGY` to one of:
 
-The component accepts one input. Its default matches what most
-consumers want; you can omit the `inputs:` block entirely.
+| Value | Description |
+|---|---|
+| `branch-prefix` (default) | Bump from the source-branch prefix of the latest merge commit. |
+| `conventional-commits` | Bump from Conventional Commits headers since the last tag. |
 
-| Input | Required | Default | Description |
-|---|---|---|---|
-| `strategy` | no | `branch-prefix` | Bump strategy. One of: branch-prefix (default), conventional-commits. |
-
-The input names, defaults, and options are sourced from
-[`templates/semvertag.yml`](https://github.com/modern-python/semvertag/blob/main/templates/semvertag.yml) —
-if this table ever drifts from the descriptor, the descriptor wins.
+When the Catalog component lands, this will become a typed `inputs:`
+block on the `include:`. The values and default match
+[`templates/semvertag.yml`](https://github.com/modern-python/semvertag/blob/main/templates/semvertag.yml)'s
+`spec.inputs.strategy` so the migration is a snippet swap.
 
 
 ## Required permissions
 
-The component pushes a tag, so the token it uses MUST carry write
-access to the repository. semvertag reads the token from these env
+The job pushes a tag, so the token it uses MUST carry write access to
+the repository. semvertag reads the token from these env
 vars in order: `SEMVERTAG_GITLAB__TOKEN`, `SEMVERTAG_TOKEN`,
 `CI_JOB_TOKEN`, `GITLAB_TOKEN`. The first set value wins.
 
 ## Token scope: `CI_JOB_TOKEN` vs Project Access Tokens
 
-Two cases govern which token the component should use:
+Two cases govern which token the job should use:
 
 - **GitLab projects where the maintainer has opted in to job-token
   write scope** (Settings → CI/CD → Token Permissions → *Allow access
@@ -107,13 +112,13 @@ is `https://gitlab.com` and is not auto-derived from `CI_SERVER_FQDN`.
 > `ConnectError`. A trailing slash is tolerated (the client strips it).
 
 For most consumers on `gitlab.com`-hosted projects with job-token
-write scope, the minimal include snippet above is the entire setup.
+write scope, the minimal job snippet above is the entire setup.
 
 ## Branch-prefix vs conventional-commits
 
 Pick `branch-prefix` if your team merges merge requests with branch
-names that follow a `fix/...`, `feat/...`, `chore/...` convention. The
-component reads the most recent merge commit's source-branch prefix
+names that follow a `fix/...`, `feat/...`, `chore/...` convention.
+semvertag reads the most recent merge commit's source-branch prefix
 and bumps accordingly — `fix/` bumps patch, `feat/` bumps minor,
 `chore/` bumps nothing. This is the default. See
 [Branch-prefix strategy](../strategies/branch-prefix.md) for the full
@@ -122,20 +127,21 @@ prefix-to-bump table and edge-case behavior.
 Pick `conventional-commits` if your team writes
 [Conventional Commits](https://www.conventionalcommits.org/) messages
 directly on the default branch (e.g. `feat: add X`, `fix: handle Y`,
-`feat!: drop Z`). The component scans commits since the last tag and
+`feat!: drop Z`). semvertag scans commits since the last tag and
 chooses the highest bump implied by their type prefixes (`feat!` or
 `BREAKING CHANGE:` → major, `feat:` → minor, `fix:` → patch,
 everything else → none). See
 [Conventional Commits strategy](../strategies/conventional-commits.md)
 for the full type-to-bump mapping and commit-scanning rules.
 
-Set the strategy per project:
+Set the strategy per project by swapping the `SEMVERTAG_STRATEGY`
+value in the job:
 
 ```yaml
-include:
-  - component: $CI_SERVER_FQDN/modern-python/semvertag/semvertag@v0.1.0
-    inputs:
-      strategy: conventional-commits
+semvertag:
+  # ...
+  variables:
+    SEMVERTAG_STRATEGY: conventional-commits
 ```
 
 
@@ -153,7 +159,7 @@ include:
   strips CI variables would suppress it). Set `SEMVERTAG_PROJECT_ID`
   as a project-level CI/CD variable as the override.
 
-- **Self-hosted GitLab, but the component connects to `gitlab.com`**
+- **Self-hosted GitLab, but the job connects to `gitlab.com`**
   — the default endpoint is `https://gitlab.com` and is not
   auto-derived from `CI_SERVER_FQDN`. Set
   `SEMVERTAG_GITLAB__ENDPOINT` as a project-level CI/CD variable
