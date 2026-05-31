@@ -262,9 +262,11 @@ class GitLabProvider:
 
     def _safe_get(self, url: str) -> tuple[httpx2.Response | None, str | None]:
         try:
-            return self.client.get(url, headers=self._auth_headers()), None  # ty: ignore[unresolved-attribute]
-        except httpx2.RequestError as exc:
-            return None, type(exc).__name__
+            return self.http.request_raw("GET", url), None
+        except ProviderAPIError as exc:
+            cause = exc.__cause__
+            error_kind = type(cause).__name__ if isinstance(cause, httpx2.RequestError) else "RequestError"
+            return None, error_kind
 
 
 def _translate_status(status: int, project_id: int) -> None:
