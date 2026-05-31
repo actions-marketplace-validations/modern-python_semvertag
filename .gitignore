@@ -20,5 +20,4 @@ dist/
 .venv
 plan.md
 /site/
-/_autosemver_reference/
 /.worktrees/
