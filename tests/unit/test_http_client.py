@@ -10,7 +10,8 @@ from semvertag.providers._http import HttpClient
 
 _BASE_URL: typing.Final = "https://example.test"
 _EXPECTED_COUNT: typing.Final = 7
-_EXPECTED_ITEMS: typing.Final = 2
+_EXPECTED_LIST_LEN: typing.Final = 2
+_EXPECTED_LAST_ITEM_COUNT: typing.Final = 2
 _UNAUTHORIZED_STATUS: typing.Final = 401
 
 
@@ -97,16 +98,25 @@ def test_status_translator_runs_before_json_decode_and_validation() -> None:
         http.request("GET", "/things/1", schema=_SampleResponse)
 
 
+def test_request_translates_list_payload_when_single_schema_expected() -> None:
+    def handler(_request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json=[{"name": "alice", "count": 1}])
+
+    http: typing.Final = _build_client(handler)
+    with pytest.raises(ProviderAPIError, match="response shape"):
+        http.request("GET", "/things/1", schema=_SampleResponse)
+
+
 def test_request_many_returns_list_of_validated_instances() -> None:
     def handler(_request: httpx2.Request) -> httpx2.Response:
-        return httpx2.Response(200, json=[{"name": "a", "count": 1}, {"name": "b", "count": _EXPECTED_ITEMS}])
+        return httpx2.Response(200, json=[{"name": "a", "count": 1}, {"name": "b", "count": _EXPECTED_LAST_ITEM_COUNT}])
 
     http: typing.Final = _build_client(handler)
     result: typing.Final = http.request_many("GET", "/things", schema=_SampleResponse)
-    assert len(result) == _EXPECTED_ITEMS
+    assert len(result) == _EXPECTED_LIST_LEN
     assert all(isinstance(item, _SampleResponse) for item in result)
     assert result[0].name == "a"
-    assert result[1].count == _EXPECTED_ITEMS
+    assert result[1].count == _EXPECTED_LAST_ITEM_COUNT
 
 
 def test_request_many_translates_dict_payload_to_provider_api_error() -> None:
@@ -115,6 +125,17 @@ def test_request_many_translates_dict_payload_to_provider_api_error() -> None:
 
     http: typing.Final = _build_client(handler)
     with pytest.raises(ProviderAPIError, match="expected list"):
+        http.request_many("GET", "/things", schema=_SampleResponse)
+
+
+def test_request_many_translates_item_validation_error_to_provider_api_error() -> None:
+    def handler(_request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(
+            200, json=[{"name": "alice", "count": 1}, {"name": "bob"}]
+        )  # second item missing 'count'
+
+    http: typing.Final = _build_client(handler)
+    with pytest.raises(ProviderAPIError, match="response shape"):
         http.request_many("GET", "/things", schema=_SampleResponse)
 
 

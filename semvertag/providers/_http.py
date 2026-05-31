@@ -42,19 +42,16 @@ class HttpClient:
             raise ProviderAPIError(msg) from exc
 
     def request_raw(self, method: str, url: str, **kwargs: typing.Any) -> httpx2.Response:  # noqa: ANN401
-        return self._request_raw(method, url, **kwargs)
-
-    def _request_translated(self, method: str, url: str, **kwargs: typing.Any) -> httpx2.Response:  # noqa: ANN401
-        response = self._request_raw(method, url, **kwargs)
-        self.status_translator(response.status_code)
-        return response
-
-    def _request_raw(self, method: str, url: str, **kwargs: typing.Any) -> httpx2.Response:  # noqa: ANN401
         try:
             return self.client.request(method, url, headers=self.auth_headers(), **kwargs)
         except httpx2.RequestError as exc:
             msg = f"request failed: {type(exc).__name__}"
             raise ProviderAPIError(msg) from exc
+
+    def _request_translated(self, method: str, url: str, **kwargs: typing.Any) -> httpx2.Response:  # noqa: ANN401
+        response = self.request_raw(method, url, **kwargs)
+        self.status_translator(response.status_code)
+        return response
 
     @staticmethod
     def _decode_json(response: httpx2.Response) -> typing.Any:  # noqa: ANN401
