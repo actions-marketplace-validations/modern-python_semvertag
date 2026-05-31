@@ -72,10 +72,6 @@ access to the repository. semvertag reads the token from these env
 vars in order: `SEMVERTAG_GITLAB__TOKEN`, `SEMVERTAG_TOKEN`,
 `CI_JOB_TOKEN`, `GITLAB_TOKEN`. The first set value wins.
 
-Run `uvx semvertag doctor` locally (or as a CI pre-flight) to confirm
-the token scope is correct. The diagnostic reports the GitLab API's
-response to a scope-probe call and names which scopes are missing.
-
 ## Token scope: `CI_JOB_TOKEN` vs Project Access Tokens
 
 Two cases govern which token the component should use:
@@ -157,8 +153,7 @@ include:
   token does not have `api` + `write_repository` scope, or the
   project's protected-tag rules disallow the bot from creating tags.
   Verify the `SEMVERTAG_TOKEN` scopes in GitLab UI (Settings → Access
-  Tokens), or run `uvx semvertag doctor` locally for a named
-  diagnosis.
+  Tokens).
 
 - **`Project id missing. Set CI_PROJECT_ID or pass --project-id.`** —
   the CI runner did not export `CI_PROJECT_ID` (the variable is

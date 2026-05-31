@@ -5,7 +5,6 @@ import typing
 import pydantic
 import pydantic_settings
 
-from semvertag._types import ConfigSource
 from semvertag.strategies.branch_prefix import BranchPrefixConfig
 from semvertag.strategies.conventional_commits import ConventionalCommitsConfig
 
@@ -72,8 +71,6 @@ class Settings(pydantic_settings.BaseSettings):
     branch_prefix: BranchPrefixConfig = pydantic.Field(default_factory=BranchPrefixConfig)
     conventional_commits: ConventionalCommitsConfig = pydantic.Field(default_factory=ConventionalCommitsConfig)
 
-    _provenance: dict[str, ConfigSource] = pydantic.PrivateAttr(default_factory=dict)
-
     @pydantic.model_validator(mode="before")
     @classmethod
     def _inject_token_aliases(cls, data: typing.Any) -> typing.Any:  # noqa: ANN401
@@ -117,11 +114,6 @@ class Settings(pydantic_settings.BaseSettings):
             return _REQUEST_TIMEOUT_CEILING
         return value
 
-    @pydantic.model_validator(mode="after")
-    def _record_env_provenance(self) -> "Settings":
-        _scan_model(self, "", self._provenance)
-        return self
-
 
 def _resolve_active_provider(data: dict[str, typing.Any]) -> str:
     raw = data.get("provider")
@@ -141,34 +133,6 @@ def _inject_token(data: dict[str, typing.Any], nested_key: str, aliases: tuple[s
         return
     _matched_alias, value = found
     nested["token"] = value
-
-
-def _scan_model(model: pydantic.BaseModel, prefix: str, provenance: dict[str, ConfigSource]) -> None:
-    for field_name in type(model).model_fields:
-        full_key = f"{prefix}{field_name}"
-        value = getattr(model, field_name)
-        if isinstance(value, pydantic.BaseModel):
-            _scan_model(value, f"{full_key}.", provenance)
-            continue
-        provenance[full_key] = _resolve_source(full_key)
-
-
-def _resolve_source(full_key: str) -> ConfigSource:
-    candidates: typing.Final = _candidate_env_names(full_key)
-    found: typing.Final = _find_aliased_env(candidates)
-    if found is None:
-        return ConfigSource(layer="default", detail="default")
-    matched_alias, _value = found
-    return ConfigSource(layer="env", detail=matched_alias)
-
-
-def _candidate_env_names(full_key: str) -> tuple[str, ...]:
-    if full_key in _TOKEN_ALIASES_BY_PATH:
-        return _TOKEN_ALIASES_BY_PATH[full_key]
-    if full_key in _TOP_LEVEL_FIELD_ALIASES:
-        return _TOP_LEVEL_FIELD_ALIASES[full_key]
-    default_env_name: typing.Final = _ENV_PREFIX + full_key.upper().replace(".", _ENV_NESTED_DELIMITER)
-    return (default_env_name,)
 
 
 def _find_aliased_env(candidates: tuple[str, ...]) -> tuple[str, str] | None:
@@ -198,11 +162,6 @@ def apply_cli_overlay(
     copied: typing.Final = settings.model_copy(update=update_top, deep=True)
     raw_data: typing.Final = {name: getattr(copied, name) for name in type(copied).model_fields}
     new_settings: typing.Final = type(copied).model_validate(raw_data)
-
-    new_provenance: typing.Final = dict(settings._provenance)  # noqa: SLF001
-    for dotted_key, (_value, flag_detail) in overrides.items():
-        new_provenance[dotted_key] = ConfigSource(layer="cli", detail=flag_detail)
-    new_settings._provenance = new_provenance  # noqa: SLF001
     return new_settings
 
 
