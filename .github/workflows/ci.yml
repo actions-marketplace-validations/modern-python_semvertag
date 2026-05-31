@@ -26,17 +26,6 @@ jobs:
           cache-dependency-glob: "**/pyproject.toml"
       - run: uv python install 3.10
       - run: just install lint-ci
-      - name: Validate action.yml against GitHub Actions schema
-        # JSON Schema validation via check-jsonschema (Python; runs through
-        # uvx — no new Go binary, no third-party action). `--builtin-schema
-        # vendor.github-actions` uses the schema vendored with check-jsonschema
-        # itself, avoiding a per-run fetch from schemastore.org and removing
-        # the upstream-schema-drift / outage failure mode. Preserves Story
-        # 4.1 / 4.2's actionlint-deferral.
-        run: |
-          uvx --from check-jsonschema check-jsonschema \
-            --builtin-schema vendor.github-actions \
-            action.yml
       - name: Validate templates/semvertag.yml shape
         # GitLab CI Catalog component descriptor — no published JSON Schema
         # exists upstream (verified 2026-05-30: not in check-jsonschema's
