@@ -39,7 +39,7 @@ def test_creates_tag_when_latest_commit_is_feature_merge_and_prior_tag_exists(
     recorded: list[httpx2.Request] = []
     install_mock_transport(_make_recording_handler(merge_commit_handler(), recorded))
 
-    result: typing.Final = cli_runner.invoke(MAIN_APP, [])
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag"])
 
     assert result.exit_code == 0, result.output + result.stderr
     assert f"Created tag {_EXPECTED_NEW_TAG}" in result.stdout
@@ -60,7 +60,7 @@ def test_skips_with_already_tagged_when_latest_commit_sha_matches_latest_tag(
         ),
     )
 
-    result: typing.Final = cli_runner.invoke(MAIN_APP, [])
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag"])
 
     assert result.exit_code == 0, result.output + result.stderr
     assert "already_tagged" in result.stdout
@@ -73,7 +73,7 @@ def test_skips_with_no_merge_commit_when_latest_commit_is_not_a_merge(
 ) -> None:
     install_mock_transport(merge_commit_handler(commit_message="Fix typo in README"))
 
-    result: typing.Final = cli_runner.invoke(MAIN_APP, [])
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag"])
 
     assert result.exit_code == 0, result.output + result.stderr
     assert "no_merge_commit" in result.stdout
@@ -86,7 +86,7 @@ def test_skips_with_no_tags_when_repo_has_zero_semver_conforming_tags(
 ) -> None:
     install_mock_transport(merge_commit_handler(tags=[]))
 
-    result: typing.Final = cli_runner.invoke(MAIN_APP, [])
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag"])
 
     assert result.exit_code == 0, result.output + result.stderr
     assert "no_tags" in result.stdout
@@ -99,7 +99,7 @@ def test_emits_json_envelope_with_schema_version_first_when_json_flag_set(
 ) -> None:
     install_mock_transport(merge_commit_handler())
 
-    result: typing.Final = cli_runner.invoke(MAIN_APP, ["--json"])
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag", "--json"])
 
     assert result.exit_code == 0, result.output + result.stderr
     lines: typing.Final = [line for line in result.stdout.splitlines() if line.strip()]

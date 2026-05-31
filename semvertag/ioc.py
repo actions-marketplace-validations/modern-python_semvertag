@@ -8,22 +8,14 @@ from semvertag._errors import ConfigError
 from semvertag._settings import Settings
 from semvertag._transport import RetryingTransport
 from semvertag._use_case import SemvertagUseCase
+from semvertag.providers._http import HttpClient
+from semvertag.providers.gitlab import GitLabProvider, _translate_status, gitlab_auth_headers
+from semvertag.strategies._base import BumpStrategy
+from semvertag.strategies.branch_prefix import BranchPrefixStrategy
+from semvertag.strategies.conventional_commits import ConventionalCommitsStrategy
 
 
-if typing.TYPE_CHECKING:
-    from semvertag.providers.gitlab import GitLabProvider
-    from semvertag.strategies._base import BumpStrategy
-    from semvertag.strategies.branch_prefix import BranchPrefixStrategy
-    from semvertag.strategies.conventional_commits import ConventionalCommitsStrategy
-
-
-def _construct_gitlab_provider(
-    settings: Settings,
-    transport: httpx2.BaseTransport,
-) -> "GitLabProvider":
-    from semvertag.providers._http import HttpClient  # noqa: PLC0415
-    from semvertag.providers.gitlab import GitLabProvider, _translate_status, gitlab_auth_headers  # noqa: PLC0415
-
+def _build_gitlab_provider(settings: Settings, transport: httpx2.BaseTransport) -> GitLabProvider:
     if settings.project_id is None:
         msg = "Project id missing. Set CI_PROJECT_ID or pass --project-id."
         raise ConfigError(msg)
@@ -45,29 +37,21 @@ def _construct_gitlab_provider(
     )
 
 
-def _build_gitlab_provider(settings: Settings) -> "GitLabProvider":
-    return _construct_gitlab_provider(settings, transport=RetryingTransport())
-
-
-def _build_branch_prefix_strategy(settings: Settings) -> "BranchPrefixStrategy":
-    from semvertag.strategies.branch_prefix import BranchPrefixStrategy  # noqa: PLC0415
-
+def _build_branch_prefix_strategy(settings: Settings) -> BranchPrefixStrategy:
     return BranchPrefixStrategy(config=settings.branch_prefix)
 
 
-def _build_conventional_commits_strategy(settings: Settings) -> "ConventionalCommitsStrategy":
-    from semvertag.strategies.conventional_commits import ConventionalCommitsStrategy  # noqa: PLC0415
-
+def _build_conventional_commits_strategy(settings: Settings) -> ConventionalCommitsStrategy:
     return ConventionalCommitsStrategy(config=settings.conventional_commits)
 
 
-def _build_current_strategy(settings: Settings) -> "BumpStrategy":
+def _build_current_strategy(settings: Settings) -> BumpStrategy:
     if settings.strategy == "conventional-commits":
         return _build_conventional_commits_strategy(settings)
     return _build_branch_prefix_strategy(settings)
 
 
-def _close_provider_client(provider: "GitLabProvider") -> None:
+def _close_provider_client(provider: GitLabProvider) -> None:
     provider.http.client.close()
 
 
@@ -75,39 +59,23 @@ class SettingsGroup(modern_di.Group):
     settings = providers.ContextProvider(scope=Scope.APP, context_type=Settings)
 
 
+class TransportsGroup(modern_di.Group):
+    transport = providers.Factory(scope=Scope.APP, creator=RetryingTransport)
+
+
 class ProvidersGroup(modern_di.Group):
     gitlab_provider = providers.Factory(
         scope=Scope.APP,
         creator=_build_gitlab_provider,
-        kwargs={"settings": SettingsGroup.settings},
-        skip_creator_parsing=True,
-        bound_type=None,
+        kwargs={"transport": TransportsGroup.transport},
         cache_settings=providers.CacheSettings(finalizer=_close_provider_client),
     )
 
 
 class StrategiesGroup(modern_di.Group):
-    branch_prefix_strategy = providers.Factory(
-        scope=Scope.APP,
-        creator=_build_branch_prefix_strategy,
-        kwargs={"settings": SettingsGroup.settings},
-        skip_creator_parsing=True,
-        bound_type=None,
-    )
-    conventional_commits_strategy = providers.Factory(
-        scope=Scope.APP,
-        creator=_build_conventional_commits_strategy,
-        kwargs={"settings": SettingsGroup.settings},
-        skip_creator_parsing=True,
-        bound_type=None,
-    )
-    current_strategy = providers.Factory(
-        scope=Scope.APP,
-        creator=_build_current_strategy,
-        kwargs={"settings": SettingsGroup.settings},
-        skip_creator_parsing=True,
-        bound_type=None,
-    )
+    branch_prefix_strategy = providers.Factory(scope=Scope.APP, creator=_build_branch_prefix_strategy)
+    conventional_commits_strategy = providers.Factory(scope=Scope.APP, creator=_build_conventional_commits_strategy)
+    current_strategy = providers.Factory(scope=Scope.APP, creator=_build_current_strategy)
 
 
 class UseCasesGroup(modern_di.Group):
@@ -118,35 +86,19 @@ class UseCasesGroup(modern_di.Group):
             "provider": ProvidersGroup.gitlab_provider,
             "strategy": StrategiesGroup.current_strategy,
         },
-        skip_creator_parsing=True,
-        bound_type=SemvertagUseCase,
     )
 
 
 ALL_GROUPS: typing.Final[list[type[modern_di.Group]]] = [
     SettingsGroup,
+    TransportsGroup,
     ProvidersGroup,
     StrategiesGroup,
     UseCasesGroup,
 ]
 
 
-def build_container(
-    settings: Settings,
-    *,
-    inner_transport: httpx2.BaseTransport | None = None,
-) -> modern_di.Container:
-    if settings.provider != "gitlab":
-        msg = f"Provider {settings.provider!r} not yet supported; v1.0 supports gitlab only."
-        raise ConfigError(msg)
-    container: typing.Final = modern_di.Container(
-        groups=ALL_GROUPS,
-        context={Settings: settings},
-    )
-    if inner_transport is not None:
-        provider_instance: typing.Final = _construct_gitlab_provider(settings, inner_transport)
-        container.override(ProvidersGroup.gitlab_provider, provider_instance)
-    return container
+container: typing.Final = modern_di.Container(groups=ALL_GROUPS)
 
 
 __all__: typing.Final = (
@@ -154,6 +106,7 @@ __all__: typing.Final = (
     "ProvidersGroup",
     "SettingsGroup",
     "StrategiesGroup",
+    "TransportsGroup",
     "UseCasesGroup",
-    "build_container",
+    "container",
 )

@@ -44,4 +44,4 @@ runs:
         # consumer hits `Project id missing` instead of the documented
         # "GitHub provider is a stub at v1.0" path.
         SEMVERTAG_PROVIDER: github
-      run: uvx semvertag
+      run: uvx semvertag tag

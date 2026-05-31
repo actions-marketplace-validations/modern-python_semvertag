@@ -6,7 +6,6 @@ import pytest
 from typer.testing import CliRunner
 
 from semvertag import ioc
-from semvertag._settings import Settings
 from tests.conftest import HandlerCallable
 
 
@@ -53,20 +52,14 @@ def cli_env(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture
-def install_mock_transport(
-    monkeypatch: pytest.MonkeyPatch,
-) -> collections.abc.Callable[[HandlerCallable], None]:
-    real_build_container: typing.Final = ioc.build_container
-
+def install_mock_transport() -> typing.Iterator[collections.abc.Callable[[HandlerCallable], None]]:
     def install(handler: HandlerCallable) -> None:
-        transport: typing.Final = httpx2.MockTransport(handler)
+        mock_transport: typing.Final = httpx2.MockTransport(handler)
+        ioc.container.override(ioc.TransportsGroup.transport, mock_transport)
 
-        def patched(settings: Settings) -> typing.Any:  # noqa: ANN401
-            return real_build_container(settings, inner_transport=transport)
-
-        monkeypatch.setattr(ioc, "build_container", patched)
-
-    return install
+    with ioc.container:
+        yield install
+        ioc.container.reset_override(ioc.TransportsGroup.transport)
 
 
 _PROJECT_PATH: typing.Final = f"/api/v4/projects/{GITLAB_PROJECT_ID}"

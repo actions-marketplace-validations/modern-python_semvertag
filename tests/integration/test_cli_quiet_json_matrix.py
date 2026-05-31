@@ -43,7 +43,7 @@ def test_emits_progress_and_human_result_when_no_flags(
 ) -> None:
     install_mock_transport(merge_commit_handler())
 
-    result: typing.Final = cli_runner.invoke(MAIN_APP, [])
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag"])
 
     assert result.exit_code == 0
     for marker in _PROGRESS_MARKERS:
@@ -59,7 +59,7 @@ def test_emits_only_human_result_when_quiet(
 ) -> None:
     install_mock_transport(merge_commit_handler())
 
-    result: typing.Final = cli_runner.invoke(MAIN_APP, ["--quiet"])
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag", "--quiet"])
 
     assert result.exit_code == 0
     for marker in _PROGRESS_MARKERS[:-1]:
@@ -75,7 +75,7 @@ def test_emits_only_json_envelope_when_json_only(
 ) -> None:
     install_mock_transport(merge_commit_handler())
 
-    result: typing.Final = cli_runner.invoke(MAIN_APP, ["--json"])
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag", "--json"])
 
     assert result.exit_code == 0
     lines: typing.Final = [line for line in result.stdout.splitlines() if line.strip()]
@@ -94,7 +94,7 @@ def test_emits_only_json_envelope_when_quiet_and_json(
 ) -> None:
     install_mock_transport(merge_commit_handler())
 
-    result: typing.Final = cli_runner.invoke(MAIN_APP, ["--quiet", "--json"])
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag", "--quiet", "--json"])
 
     assert result.exit_code == 0
     lines: typing.Final = [line for line in result.stdout.splitlines() if line.strip()]
@@ -119,7 +119,7 @@ def test_exits_with_one_on_generic_semvertag_error(
 
     monkeypatch.setattr(SemvertagUseCase, "__call__", raising_call)
 
-    result: typing.Final = cli_runner.invoke(MAIN_APP, [])
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag"])
 
     assert result.exit_code == _EXIT_GENERIC_FAILURE
     assert "synthetic generic failure" in result.stderr
@@ -137,7 +137,7 @@ def test_exits_with_two_on_config_error_via_404(
 
     install_mock_transport(handler)
 
-    result: typing.Final = cli_runner.invoke(MAIN_APP, [])
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag"])
 
     assert result.exit_code == _EXIT_CONFIG_ERROR
     assert "GitLab project not found" in result.stderr
@@ -156,7 +156,7 @@ def test_exits_with_three_on_auth_error_via_401(
 
     install_mock_transport(handler)
 
-    result: typing.Final = cli_runner.invoke(MAIN_APP, [])
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag"])
 
     assert result.exit_code == _EXIT_AUTH_ERROR
     assert "Token rejected: 401" in result.stderr
@@ -176,7 +176,7 @@ def test_exits_with_four_on_provider_api_error_via_503_after_retry_exhaustion(
 
     install_mock_transport(handler)
 
-    result: typing.Final = cli_runner.invoke(MAIN_APP, [])
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag"])
 
     assert result.exit_code == _EXIT_PROVIDER_API_ERROR
     assert "GitLab API failure: 503" in result.stderr
@@ -190,7 +190,7 @@ def test_exits_with_two_on_validation_error_for_bad_request_timeout(
     monkeypatch.setenv("SEMVERTAG_TOKEN", "glpat-XXXXXXXXXXXXXXXXXXXX")
     monkeypatch.setenv("SEMVERTAG_PROJECT_ID", "999")
 
-    result: typing.Final = cli_runner.invoke(MAIN_APP, [])
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag"])
 
     assert result.exit_code == _EXIT_CONFIG_ERROR
     assert "Configuration error" in result.stderr
@@ -203,7 +203,7 @@ def test_exits_with_two_when_project_id_missing(
 ) -> None:
     monkeypatch.setenv("SEMVERTAG_TOKEN", "glpat-XXXXXXXXXXXXXXXXXXXX")
 
-    result: typing.Final = cli_runner.invoke(MAIN_APP, [])
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag"])
 
     assert result.exit_code == _EXIT_CONFIG_ERROR
     assert "Project id missing" in result.stderr

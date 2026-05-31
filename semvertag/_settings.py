@@ -69,7 +69,6 @@ class Settings(pydantic_settings.BaseSettings):
         default=None,
         validation_alias=pydantic.AliasChoices("SEMVERTAG_PROJECT_ID", "CI_PROJECT_ID"),
     )
-    quiet: bool = pydantic.Field(default=False)
     gitlab: GitLabConfig = pydantic.Field(default_factory=GitLabConfig)
     github: GitHubConfig = pydantic.Field(default_factory=GitHubConfig)
     branch_prefix: BranchPrefixConfig = pydantic.Field(default_factory=BranchPrefixConfig)

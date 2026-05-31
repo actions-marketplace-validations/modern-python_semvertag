@@ -31,7 +31,6 @@ def test_uses_defaults_when_no_env_set() -> None:
     assert settings.default_branch is None
     assert settings.request_timeout == _TIMEOUT_DEFAULT_VALUE
     assert settings.project_id is None
-    assert settings.quiet is False
     assert settings.gitlab.endpoint == "https://gitlab.com"
     assert settings.gitlab.token.get_secret_value() == ""
     assert settings.github.token.get_secret_value() == ""
@@ -146,12 +145,3 @@ def test_prefers_semvertag_project_id_over_ci_project_id(
     monkeypatch.setenv("CI_PROJECT_ID", _PROJECT_ID_CI)
     settings: typing.Final = Settings()
     assert settings.project_id == _PROJECT_ID_INT_SEMVERTAG
-
-
-@pytest.mark.usefixtures("clean_settings_env")
-def test_quiet_picks_up_semvertag_quiet_env_var(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("SEMVERTAG_QUIET", "true")
-    settings: typing.Final = Settings()
-    assert settings.quiet is True

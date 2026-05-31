@@ -4,7 +4,7 @@
 
     The Marketplace action is published so consumers can start wiring up
     their workflows, but the wrapped CLI's GitHub provider is a stub at
-    v1.0 — `uvx semvertag` will exit non-zero with
+    v1.0 — `uvx semvertag tag` will exit non-zero with
     `Provider 'github' not yet supported; v1.0 supports gitlab only.` until
     the GitHub provider lands in a v1.x release. Everything below describes
     the intended steady-state behavior; use it to plan your workflow now and
@@ -13,7 +13,7 @@
 Use semvertag in GitHub Actions via the [Marketplace
 action](https://github.com/marketplace/actions/semvertag). The action is a
 thin composite wrapper around the `semvertag` CLI — it installs `uv`, then
-runs `uvx semvertag` with the workflow-issued `GITHUB_TOKEN` and your chosen
+runs `uvx semvertag tag` with the workflow-issued `GITHUB_TOKEN` and your chosen
 strategy. No PyPI install in your repo, no maintained workflow YAML beyond
 the snippet below.
 
@@ -139,7 +139,7 @@ Set the strategy per repo:
 
 - **"GitHub provider not implemented yet"** — at v1.0, semvertag's GitHub
   provider is a stub. The Marketplace action exists for distribution and
-  the composite wraps `uvx semvertag` correctly, but the underlying CLI's
+  the composite wraps `uvx semvertag tag` correctly, but the underlying CLI's
   GitHub provider is scheduled for a v1.x release. Until then, the
   Marketplace action runs against a not-yet-functional provider and the
   CLI exits non-zero with this message. Track the GitHub provider story in

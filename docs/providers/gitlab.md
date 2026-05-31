@@ -3,7 +3,7 @@
 Use semvertag in GitLab CI via the published CI Catalog component. The
 component is a thin GitLab CI job template around the `semvertag` CLI —
 it pulls a lightweight Python image, installs `uv`, then runs
-`uvx semvertag`. No PyPI install in your repo, no maintained pipeline
+`uvx semvertag tag`. No PyPI install in your repo, no maintained pipeline
 YAML beyond the snippet below.
 
 ## Quick Start

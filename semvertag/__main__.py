@@ -2,6 +2,7 @@ import errno
 import importlib.metadata
 import typing
 
+import modern_di_typer
 import pydantic
 import typer
 
@@ -9,6 +10,7 @@ from semvertag import ioc
 from semvertag._errors import ConfigError, SemvertagError
 from semvertag._output import Output, build_json_output, build_rich_output
 from semvertag._settings import Settings, apply_cli_overlay
+from semvertag._use_case import SemvertagUseCase
 
 
 _PACKAGE_NAME: typing.Final = "semvertag"
@@ -17,10 +19,11 @@ _PACKAGE_NAME: typing.Final = "semvertag"
 MAIN_APP: typing.Final = typer.Typer(
     name="semvertag",
     help=("Auto-tag GitLab/GitHub/Bitbucket repos with semantic version tags — one tool, two strategies."),
-    invoke_without_command=True,
-    no_args_is_help=False,
+    no_args_is_help=True,
     add_completion=True,
 )
+
+modern_di_typer.setup_di(MAIN_APP, ioc.container)
 
 
 def _version_callback(value: bool) -> None:
@@ -43,7 +46,6 @@ def _collect_overrides(  # noqa: PLR0913
     default_branch: str | None,
     gitlab_endpoint: str | None,
     request_timeout: float | None,
-    quiet: bool,
 ) -> dict[str, tuple[typing.Any, str]]:
     overrides: dict[str, tuple[typing.Any, str]] = {}
     if project_id is not None:
@@ -60,8 +62,6 @@ def _collect_overrides(  # noqa: PLR0913
         overrides["gitlab.endpoint"] = (gitlab_endpoint, "--gitlab-endpoint")
     if request_timeout is not None:
         overrides["request_timeout"] = (request_timeout, "--request-timeout")
-    if quiet:
-        overrides["quiet"] = (True, "--quiet")
     return overrides
 
 
@@ -73,10 +73,10 @@ def _config_error_from_validation(exc: pydantic.ValidationError) -> ConfigError:
     return ConfigError(msg)
 
 
-def _build_output_for_flags(*, quiet: bool, json_flag: bool) -> Output:
-    if json_flag:
-        return build_json_output(quiet=quiet)
-    return build_rich_output(quiet=quiet)
+def _validate_settings(settings: Settings) -> None:
+    if settings.provider != "gitlab":
+        msg = f"Provider {settings.provider!r} not yet supported; v1.0 supports gitlab only."
+        raise ConfigError(msg)
 
 
 @MAIN_APP.callback()
@@ -110,23 +110,13 @@ def _main_callback(  # noqa: PLR0913
         float | None,
         typer.Option("--request-timeout", help="Per-request timeout in seconds (clamped to 10)."),
     ] = None,
-    json_flag: typing.Annotated[
-        bool,
-        typer.Option("--json", help="Emit a JSON envelope on stdout instead of human-readable output."),
-    ] = False,
-    quiet: typing.Annotated[
-        bool,
-        typer.Option("--quiet", help="Suppress progress narrative; final result still emits."),
-    ] = False,
     _version: typing.Annotated[
         bool | None,
         typer.Option("--version", callback=_version_callback, is_eager=True, help="Show version and exit."),
     ] = None,
 ) -> None:
-    if ctx.invoked_subcommand is not None:
+    if ctx.resilient_parsing:
         return
-
-    output = _build_output_for_flags(quiet=quiet, json_flag=json_flag)
 
     try:
         settings = Settings()
@@ -139,24 +129,50 @@ def _main_callback(  # noqa: PLR0913
                 default_branch=default_branch,
                 gitlab_endpoint=gitlab_endpoint,
                 request_timeout=request_timeout,
-                quiet=quiet,
             )
             settings = apply_cli_overlay(settings, overrides)
         except ValueError as exc:
             raise ConfigError(str(exc)) from exc
-        output = _build_output_for_flags(quiet=settings.quiet, json_flag=json_flag)
-        container = ioc.build_container(settings)
-        with container:
-            use_case = container.resolve_provider(ioc.UseCasesGroup.semvertag_use_case)
-            use_case(output=output)
+        _validate_settings(settings)
     except pydantic.ValidationError as exc:
         err = _config_error_from_validation(exc)
-        output.error(str(err))
+        typer.echo(f"Error: {err}", err=True)
         raise typer.Exit(code=err.exit_code) from err
+    except ConfigError as err:
+        typer.echo(f"Error: {err}", err=True)
+        raise typer.Exit(code=err.exit_code) from err
+
+    app_container = modern_di_typer.fetch_di_container(ctx)
+    app_container.set_context(Settings, settings)
+
+
+@modern_di_typer.inject
+def _resolve_use_case(
+    use_case: typing.Annotated[SemvertagUseCase, modern_di_typer.FromDI(SemvertagUseCase)],
+) -> SemvertagUseCase:
+    return use_case
+
+
+@MAIN_APP.command("tag")
+def _tag_command(
+    ctx: typer.Context,
+    quiet: typing.Annotated[
+        bool,
+        typer.Option("--quiet", help="Suppress progress narrative; final result still emits."),
+    ] = False,
+    json_flag: typing.Annotated[
+        bool,
+        typer.Option("--json", help="Emit a JSON envelope on stdout instead of human-readable output."),
+    ] = False,
+) -> None:
+    output: Output = build_json_output(quiet=quiet) if json_flag else build_rich_output(quiet=quiet)
+    try:
+        use_case = _resolve_use_case(ctx=ctx)
+        use_case(output=output)
     except ImportError as exc:
         err = ConfigError(f"Required module unavailable: {exc}.")
         output.error(str(err))
-        raise typer.Exit(code=err.exit_code) from err
+        raise typer.Exit(code=err.exit_code) from exc
     except SemvertagError as err:
         output.error(str(err))
         raise typer.Exit(code=err.exit_code) from err
@@ -169,7 +185,8 @@ def _main_callback(  # noqa: PLR0913
 
 
 def main() -> None:
-    MAIN_APP()
+    with ioc.container:
+        MAIN_APP()
 
 
 if __name__ == "__main__":  # pragma: no cover
