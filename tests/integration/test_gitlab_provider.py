@@ -8,7 +8,7 @@ from semvertag import _transport
 from semvertag._errors import AuthError, ConfigError, ProviderAPIError
 from semvertag._settings import GitLabConfig
 from semvertag._transport import RetryingTransport
-from semvertag._types import CheckResult, Commit, Tag
+from semvertag._types import Commit, Tag
 from semvertag.providers._base import Provider
 from semvertag.providers._http import HttpClient
 from semvertag.providers.gitlab import GitLabProvider, _translate_status, gitlab_auth_headers
@@ -25,9 +25,6 @@ from tests.conftest import (
 _PROJECT_PATH: typing.Final = f"/api/v4/projects/{GITLAB_PROJECT_ID}"
 _COMMITS_PATH: typing.Final = f"{_PROJECT_PATH}/repository/commits"
 _TAGS_PATH: typing.Final = f"{_PROJECT_PATH}/repository/tags"
-_USER_PATH: typing.Final = "/api/v4/user"
-_TOKEN_INTROSPECTION_PATH: typing.Final = "/api/v4/personal_access_tokens/self"
-_PROTECTED_TAGS_PATH: typing.Final = f"{_PROJECT_PATH}/protected_tags"
 _DEFAULT_COMMIT_SHA: typing.Final = "a2b4d12"
 _DEFAULT_COMMIT_MESSAGE: typing.Final = "default test commit"
 _UNAUTHORIZED_STATUS: typing.Final = 401
@@ -79,10 +76,6 @@ def test_gitlab_provider_exposes_every_member_required_by_protocol() -> None:
         "get_latest_commit_on_default_branch",
         "list_tags",
         "create_tag",
-        "check_token",
-        "check_scopes",
-        "check_project_access",
-        "check_protected_tags",
     )
     for member in expected_members:
         assert hasattr(GitLabProvider, member), f"GitLabProvider is missing Provider member: {member!r}"
@@ -576,176 +569,3 @@ def test_raises_provider_api_error_when_request_error_chained_from_exc(
     with client, pytest.raises(ProviderAPIError, match="request failed") as exc_info:
         verb_callable(provider)
     assert isinstance(exc_info.value.__cause__, httpx2.ConnectError)
-
-
-# AC8 -- Doctor methods
-
-
-def test_check_token_returns_passed_on_200() -> None:
-    overrides: typing.Final = {
-        ("GET", _USER_PATH): httpx2.Response(200, json={"id": 1, "username": "ci-bot"}),
-    }
-    provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client:
-        result = provider.check_token()
-    assert result == CheckResult(name="token", status="passed", cause="Token recognized by GitLab API.")
-
-
-def test_check_token_returns_failed_on_401() -> None:
-    overrides: typing.Final = {("GET", _USER_PATH): httpx2.Response(401, json={})}
-    provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client:
-        result = provider.check_token()
-    assert result.name == "token"
-    assert result.status == "failed"
-    assert "Token rejected" in result.cause
-
-
-def test_check_token_returns_failed_on_unexpected_status() -> None:
-    overrides: typing.Final = {
-        ("GET", _USER_PATH): httpx2.Response(_SERVICE_UNAVAILABLE_STATUS, json={}),
-    }
-    provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client:
-        result = provider.check_token()
-    assert result.status == "failed"
-    assert f"Unexpected GitLab response: {_SERVICE_UNAVAILABLE_STATUS}" in result.cause
-
-
-def test_check_token_returns_failed_on_network_error() -> None:
-    def handler(request: httpx2.Request) -> httpx2.Response:
-        if request.url.path == _USER_PATH:
-            msg = "simulated"
-            raise httpx2.ConnectError(msg)
-        return default_handler(request)
-
-    provider, client = _make_provider(handler)
-    with client:
-        result = provider.check_token()
-    assert result.status == "failed"
-    assert "GitLab unreachable (ConnectError)" in result.cause
-
-
-def test_check_scopes_returns_passed_when_api_scope_present() -> None:
-    overrides: typing.Final = {
-        ("GET", _TOKEN_INTROSPECTION_PATH): httpx2.Response(
-            200,
-            json={"scopes": ["api", "read_repository"]},
-        ),
-    }
-    provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client:
-        result = provider.check_scopes()
-    assert result.status == "passed"
-    assert "'api' scope" in result.cause
-
-
-def test_check_scopes_returns_failed_when_api_scope_missing() -> None:
-    overrides: typing.Final = {
-        ("GET", _TOKEN_INTROSPECTION_PATH): httpx2.Response(
-            200,
-            json={"scopes": ["read_repository"]},
-        ),
-    }
-    provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client:
-        result = provider.check_scopes()
-    assert result.status == "failed"
-    assert "missing 'api' scope" in result.cause
-
-
-def test_check_scopes_returns_failed_on_401() -> None:
-    overrides: typing.Final = {("GET", _TOKEN_INTROSPECTION_PATH): httpx2.Response(401, json={})}
-    provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client:
-        result = provider.check_scopes()
-    assert result.status == "failed"
-
-
-def test_check_scopes_returns_failed_on_404_for_old_gitlab() -> None:
-    overrides: typing.Final = {("GET", _TOKEN_INTROSPECTION_PATH): httpx2.Response(404, json={})}
-    provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client:
-        result = provider.check_scopes()
-    assert result.status == "failed"
-    assert "version too old" in result.cause
-
-
-def test_check_project_access_returns_passed_on_200(gitlab_provider: GitLabProvider) -> None:
-    result: typing.Final = gitlab_provider.check_project_access()
-    assert result.status == "passed"
-    assert f"project_id={GITLAB_PROJECT_ID}" in result.cause
-
-
-def test_check_project_access_returns_failed_on_403() -> None:
-    overrides: typing.Final = {("GET", _PROJECT_PATH): httpx2.Response(403, json={})}
-    provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client:
-        result = provider.check_project_access()
-    assert result.status == "failed"
-    assert "no access" in result.cause
-
-
-def test_check_project_access_returns_failed_on_404() -> None:
-    overrides: typing.Final = {("GET", _PROJECT_PATH): httpx2.Response(404, json={})}
-    provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client:
-        result = provider.check_project_access()
-    assert result.status == "failed"
-    assert "project not found" in result.cause
-
-
-def test_check_protected_tags_returns_passed_on_200() -> None:
-    overrides: typing.Final = {
-        ("GET", _PROTECTED_TAGS_PATH): httpx2.Response(200, json=[]),
-    }
-    provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client:
-        result = provider.check_protected_tags()
-    assert result.status == "passed"
-
-
-def test_check_protected_tags_returns_failed_on_403() -> None:
-    overrides: typing.Final = {("GET", _PROTECTED_TAGS_PATH): httpx2.Response(403, json={})}
-    provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client:
-        result = provider.check_protected_tags()
-    assert result.status == "failed"
-    assert "Token cannot read protected_tags" in result.cause
-
-
-def test_check_project_access_returns_failed_on_401() -> None:
-    overrides: typing.Final = {("GET", _PROJECT_PATH): httpx2.Response(401, json={})}
-    provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client:
-        result = provider.check_project_access()
-    assert result.status == "failed"
-    assert "Token rejected" in result.cause
-
-
-def test_check_protected_tags_returns_failed_on_401() -> None:
-    overrides: typing.Final = {("GET", _PROTECTED_TAGS_PATH): httpx2.Response(401, json={})}
-    provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client:
-        result = provider.check_protected_tags()
-    assert result.status == "failed"
-    assert "Token cannot read protected_tags" in result.cause
-
-
-def test_check_protected_tags_returns_failed_on_404() -> None:
-    overrides: typing.Final = {("GET", _PROTECTED_TAGS_PATH): httpx2.Response(404, json={})}
-    provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client:
-        result = provider.check_protected_tags()
-    assert result.status == "failed"
-    assert "project not found" in result.cause
-    assert f"project_id={GITLAB_PROJECT_ID}" in result.cause
-
-
-def test_check_token_returns_failed_on_403() -> None:
-    overrides: typing.Final = {("GET", _USER_PATH): httpx2.Response(403, json={})}
-    provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client:
-        result = provider.check_token()
-    assert result.status == "failed"
-    assert "blocked" in result.cause.lower() or "permission" in result.cause.lower()
