@@ -26,6 +26,7 @@ class HttpClient:
         except httpx2.RequestError as exc:
             msg = f"request failed: {type(exc).__name__}"
             raise ProviderAPIError(msg) from exc
+        self.status_translator(response.status_code)
         try:
             payload = response.json()
         except (ValueError, httpx2.DecodingError) as exc:

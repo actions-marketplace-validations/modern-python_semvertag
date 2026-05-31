@@ -4,12 +4,13 @@ import httpx2
 import pydantic
 import pytest
 
-from semvertag._errors import ProviderAPIError
+from semvertag._errors import AuthError, ProviderAPIError
 from semvertag.providers._http import HttpClient
 
 
 _BASE_URL: typing.Final = "https://example.test"
 _EXPECTED_COUNT: typing.Final = 7
+_UNAUTHORIZED_STATUS: typing.Final = 401
 
 
 class _SampleResponse(pydantic.BaseModel):
@@ -72,4 +73,24 @@ def test_request_translates_wrong_field_type_to_provider_api_error() -> None:
 
     http: typing.Final = _build_client(handler)
     with pytest.raises(ProviderAPIError, match="response shape"):
+        http.request("GET", "/things/1", schema=_SampleResponse)
+
+
+def test_status_translator_runs_before_json_decode_and_validation() -> None:
+    def handler(_request: httpx2.Request) -> httpx2.Response:
+        # Body is HTML, not JSON — would fail both decode and schema validation.
+        return httpx2.Response(_UNAUTHORIZED_STATUS, text="<html>Unauthorized</html>")
+
+    def translator(status: int) -> None:
+        if status == _UNAUTHORIZED_STATUS:
+            msg = "token rejected"
+            raise AuthError(msg)
+
+    http: typing.Final = HttpClient(
+        client=httpx2.Client(transport=httpx2.MockTransport(handler), base_url=_BASE_URL),
+        auth_headers=dict,
+        status_translator=translator,
+    )
+
+    with pytest.raises(AuthError, match="token rejected"):
         http.request("GET", "/things/1", schema=_SampleResponse)
