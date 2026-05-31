@@ -7,7 +7,7 @@ import pytest
 
 from semvertag._settings import GitLabConfig
 from semvertag.providers._http import HttpClient
-from semvertag.providers.gitlab import GitLabProvider, _translate_status
+from semvertag.providers.gitlab import GitLabProvider, _translate_status, gitlab_auth_headers
 
 
 GITLAB_PROJECT_ID: typing.Final = 999
@@ -76,7 +76,7 @@ def gitlab_http(gitlab_client: httpx2.Client) -> HttpClient:
     config: typing.Final = GitLabConfig(endpoint=GITLAB_ENDPOINT, token=pydantic.SecretStr(GITLAB_TOKEN))
     return HttpClient(
         client=gitlab_client,
-        auth_headers=lambda: {"PRIVATE-TOKEN": config.token.get_secret_value()},
+        auth_headers=lambda: gitlab_auth_headers(config.token),
         status_translator=_make_status_translator(GITLAB_PROJECT_ID),
     )
 

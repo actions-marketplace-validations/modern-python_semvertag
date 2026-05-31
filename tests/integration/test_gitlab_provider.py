@@ -11,7 +11,7 @@ from semvertag._transport import RetryingTransport
 from semvertag._types import CheckResult, Commit, Tag
 from semvertag.providers._base import Provider
 from semvertag.providers._http import HttpClient
-from semvertag.providers.gitlab import GitLabProvider, _translate_status
+from semvertag.providers.gitlab import GitLabProvider, _translate_status, gitlab_auth_headers
 from tests.conftest import (
     GITLAB_ENDPOINT,
     GITLAB_PROJECT_ID,
@@ -46,7 +46,7 @@ def _make_provider(handler: HandlerCallable) -> tuple[GitLabProvider, httpx2.Cli
     config: typing.Final = GitLabConfig(endpoint=GITLAB_ENDPOINT, token=pydantic.SecretStr(GITLAB_TOKEN))
     http: typing.Final = HttpClient(
         client=client,
-        auth_headers=lambda: {"PRIVATE-TOKEN": config.token.get_secret_value()},
+        auth_headers=lambda: gitlab_auth_headers(config.token),
         status_translator=lambda status: _translate_status(status, GITLAB_PROJECT_ID),
     )
     provider: typing.Final = GitLabProvider(config=config, project_id=GITLAB_PROJECT_ID, http=http)
@@ -62,7 +62,7 @@ def _make_provider_with_retrying_transport(
     config: typing.Final = GitLabConfig(endpoint=GITLAB_ENDPOINT, token=pydantic.SecretStr(GITLAB_TOKEN))
     http: typing.Final = HttpClient(
         client=client,
-        auth_headers=lambda: {"PRIVATE-TOKEN": config.token.get_secret_value()},
+        auth_headers=lambda: gitlab_auth_headers(config.token),
         status_translator=lambda status: _translate_status(status, GITLAB_PROJECT_ID),
     )
     provider: typing.Final = GitLabProvider(config=config, project_id=GITLAB_PROJECT_ID, http=http)
@@ -623,7 +623,7 @@ def test_check_token_returns_failed_on_network_error() -> None:
     with client:
         result = provider.check_token()
     assert result.status == "failed"
-    assert "GitLab unreachable" in result.cause
+    assert "GitLab unreachable (ConnectError)" in result.cause
 
 
 def test_check_scopes_returns_passed_when_api_scope_present() -> None:

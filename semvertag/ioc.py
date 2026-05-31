@@ -31,7 +31,7 @@ def _construct_gitlab_provider(
     transport: httpx2.BaseTransport,
 ) -> "GitLabProvider":
     from semvertag.providers._http import HttpClient  # noqa: PLC0415
-    from semvertag.providers.gitlab import GitLabProvider, _translate_status  # noqa: PLC0415
+    from semvertag.providers.gitlab import GitLabProvider, _translate_status, gitlab_auth_headers  # noqa: PLC0415
 
     if settings.project_id is None:
         msg = "Project id missing. Set CI_PROJECT_ID or pass --project-id."
@@ -44,7 +44,7 @@ def _construct_gitlab_provider(
     )
     http: typing.Final = HttpClient(
         client=client,
-        auth_headers=lambda: {"PRIVATE-TOKEN": settings.gitlab.token.get_secret_value()},
+        auth_headers=lambda: gitlab_auth_headers(settings.gitlab.token),
         status_translator=lambda status: _translate_status(status, project_id),
     )
     return GitLabProvider(

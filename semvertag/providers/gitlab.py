@@ -254,9 +254,6 @@ class GitLabProvider:
             cause=f"Unexpected GitLab response: {response.status_code}.",
         )
 
-    def _auth_headers(self) -> dict[str, str]:
-        return {_PRIVATE_TOKEN_HEADER: self.config.token.get_secret_value()}
-
     def _url(self, path: str) -> str:
         return f"{self.config.endpoint.rstrip('/')}{path}"
 
@@ -267,6 +264,10 @@ class GitLabProvider:
             cause = exc.__cause__
             error_kind = type(cause).__name__ if isinstance(cause, httpx2.RequestError) else "RequestError"
             return None, error_kind
+
+
+def gitlab_auth_headers(token: pydantic.SecretStr) -> dict[str, str]:
+    return {_PRIVATE_TOKEN_HEADER: token.get_secret_value()}
 
 
 def _translate_status(status: int, project_id: int) -> None:
@@ -368,4 +369,4 @@ def _same_origin(url: str, endpoint: str) -> bool:
     return parsed.scheme == expected.scheme and parsed.netloc == expected.netloc
 
 
-__all__: typing.Final = ("GitLabProvider",)
+__all__: typing.Final = ("GitLabProvider", "gitlab_auth_headers")
