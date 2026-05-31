@@ -27,3 +27,9 @@ test-branch-strategies:
 
 test-cc-strategies:
     uv run --no-sync pytest -o "addopts=" --cov=semvertag.strategies.conventional_commits --cov-branch --cov-fail-under=100 --cov-report=term-missing tests/unit/test_conventional_commits_strategy.py
+
+publish:
+    rm -rf dist
+    uv version $GITHUB_REF_NAME
+    uv build
+    uv publish --token $PYPI_TOKEN
