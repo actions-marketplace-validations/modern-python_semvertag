@@ -21,3 +21,4 @@ dist/
 plan.md
 /site/
 /_autosemver_reference/
+/.worktrees/
