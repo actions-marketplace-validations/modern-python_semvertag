@@ -4,10 +4,12 @@ import typing
 import urllib.parse
 
 import httpx2
+import pydantic
 
 from semvertag._errors import AuthError, ConfigError, ProviderAPIError
 from semvertag._settings import GitLabConfig
 from semvertag._types import CheckResult, Commit, Tag
+from semvertag.providers._http import HttpClient
 
 
 _API_PREFIX: typing.Final = "/api/v4/projects"
@@ -31,6 +33,11 @@ _HTTP_SERVER_ERROR_MAX: typing.Final = 600
 _TAG_EXISTS_FRAGMENT: typing.Final = "already exists"
 _API_SCOPE: typing.Final = "api"
 
+
+class _ProjectResponse(pydantic.BaseModel):
+    default_branch: str | None
+
+
 # RFC 8288 Link header: <uri-reference>;param=value;param="value";...
 _LINK_ENTRY_RE: typing.Final = re.compile(
     r"<\s*(?P<url>[^>]*?)\s*>(?P<params>(?:\s*;\s*[^,;]+)*)",
@@ -42,34 +49,24 @@ class GitLabProvider:
     name: typing.ClassVar[str] = "gitlab"
     config: GitLabConfig
     project_id: int
-    client: httpx2.Client
+    http: HttpClient
 
     def get_default_branch(self) -> str:
-        url: typing.Final = self._url(f"{_API_PREFIX}/{self.project_id}")
-        try:
-            response = self.client.get(url, headers=self._auth_headers())
-        except httpx2.RequestError as exc:
-            raise ProviderAPIError(_request_failed_message(exc)) from exc
-        _translate_status(response.status_code, self.project_id)
-        try:
-            payload = response.json()
-        except (ValueError, httpx2.DecodingError) as exc:
-            msg = "GitLab project response malformed. Check SEMVERTAG_GITLAB__ENDPOINT and project ID."
-            raise ProviderAPIError(msg) from exc
-        if not isinstance(payload, dict) or "default_branch" not in payload:
-            msg = "GitLab project response malformed. Check SEMVERTAG_GITLAB__ENDPOINT and project ID."
-            raise ProviderAPIError(msg)
-        default_branch = payload["default_branch"]
-        if not isinstance(default_branch, str) or not default_branch:
+        project = self.http.request(
+            "GET",
+            self._url(f"{_API_PREFIX}/{self.project_id}"),
+            schema=_ProjectResponse,
+        )
+        if not project.default_branch:
             msg = "Default branch missing from GitLab response. Verify the project has a default branch configured."
             raise ConfigError(msg)
-        return default_branch
+        return project.default_branch
 
     def get_latest_commit_on_default_branch(self) -> Commit:
         default_branch: typing.Final = self.get_default_branch()
         url: typing.Final = self._url(f"{_API_PREFIX}/{self.project_id}/repository/commits")
         try:
-            response = self.client.get(
+            response = self.client.get(  # ty: ignore[unresolved-attribute]
                 url,
                 params={"ref_name": default_branch, "per_page": 1},
                 headers=self._auth_headers(),
@@ -102,7 +99,7 @@ class GitLabProvider:
         params: dict[str, typing.Any] | None = {"per_page": _TAGS_PER_PAGE, "page": 1}
         for _ in range(_MAX_TAG_PAGES):
             try:
-                response = self.client.get(url, params=params, headers=self._auth_headers())
+                response = self.client.get(url, params=params, headers=self._auth_headers())  # ty: ignore[unresolved-attribute]
             except httpx2.RequestError as exc:
                 raise ProviderAPIError(_request_failed_message(exc)) from exc
             _translate_status(response.status_code, self.project_id)
@@ -138,7 +135,7 @@ class GitLabProvider:
     def create_tag(self, name: str, commit_sha: str) -> None:
         url: typing.Final = self._url(f"{_API_PREFIX}/{self.project_id}/repository/tags")
         try:
-            response = self.client.post(
+            response = self.client.post(  # ty: ignore[unresolved-attribute]
                 url,
                 json={"tag_name": name, "ref": commit_sha},
                 headers=self._auth_headers(),
@@ -285,7 +282,7 @@ class GitLabProvider:
 
     def _safe_get(self, url: str) -> tuple[httpx2.Response | None, str | None]:
         try:
-            return self.client.get(url, headers=self._auth_headers()), None
+            return self.client.get(url, headers=self._auth_headers()), None  # ty: ignore[unresolved-attribute]
         except httpx2.RequestError as exc:
             return None, type(exc).__name__
 

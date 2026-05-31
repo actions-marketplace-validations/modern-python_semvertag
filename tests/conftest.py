@@ -6,7 +6,8 @@ import pydantic
 import pytest
 
 from semvertag._settings import GitLabConfig
-from semvertag.providers.gitlab import GitLabProvider
+from semvertag.providers._http import HttpClient
+from semvertag.providers.gitlab import GitLabProvider, _translate_status
 
 
 GITLAB_PROJECT_ID: typing.Final = 999
@@ -16,6 +17,13 @@ _REQUEST_TIMEOUT: typing.Final = 8.0
 
 
 HandlerCallable: typing.TypeAlias = collections.abc.Callable[[httpx2.Request], httpx2.Response]
+
+
+def _make_status_translator(project_id: int) -> typing.Callable[[int], None]:
+    def translator(status: int) -> None:
+        _translate_status(status, project_id)
+
+    return translator
 
 
 def default_handler(request: httpx2.Request) -> httpx2.Response:
@@ -64,6 +72,16 @@ def gitlab_client(gitlab_transport: httpx2.MockTransport) -> collections.abc.Ite
 
 
 @pytest.fixture
-def gitlab_provider(gitlab_client: httpx2.Client) -> GitLabProvider:
+def gitlab_http(gitlab_client: httpx2.Client) -> HttpClient:
     config: typing.Final = GitLabConfig(endpoint=GITLAB_ENDPOINT, token=pydantic.SecretStr(GITLAB_TOKEN))
-    return GitLabProvider(config=config, project_id=GITLAB_PROJECT_ID, client=gitlab_client)
+    return HttpClient(
+        client=gitlab_client,
+        auth_headers=lambda: {"PRIVATE-TOKEN": config.token.get_secret_value()},
+        status_translator=_make_status_translator(GITLAB_PROJECT_ID),
+    )
+
+
+@pytest.fixture
+def gitlab_provider(gitlab_http: HttpClient) -> GitLabProvider:
+    config: typing.Final = GitLabConfig(endpoint=GITLAB_ENDPOINT, token=pydantic.SecretStr(GITLAB_TOKEN))
+    return GitLabProvider(config=config, project_id=GITLAB_PROJECT_ID, http=gitlab_http)

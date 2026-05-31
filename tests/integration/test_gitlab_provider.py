@@ -10,7 +10,8 @@ from semvertag._settings import GitLabConfig
 from semvertag._transport import RetryingTransport
 from semvertag._types import CheckResult, Commit, Tag
 from semvertag.providers._base import Provider
-from semvertag.providers.gitlab import GitLabProvider
+from semvertag.providers._http import HttpClient
+from semvertag.providers.gitlab import GitLabProvider, _translate_status
 from tests.conftest import (
     GITLAB_ENDPOINT,
     GITLAB_PROJECT_ID,
@@ -43,7 +44,12 @@ def _make_provider(handler: HandlerCallable) -> tuple[GitLabProvider, httpx2.Cli
     transport: typing.Final = httpx2.MockTransport(handler)
     client: typing.Final = httpx2.Client(transport=transport, base_url=GITLAB_ENDPOINT)
     config: typing.Final = GitLabConfig(endpoint=GITLAB_ENDPOINT, token=pydantic.SecretStr(GITLAB_TOKEN))
-    provider: typing.Final = GitLabProvider(config=config, project_id=GITLAB_PROJECT_ID, client=client)
+    http: typing.Final = HttpClient(
+        client=client,
+        auth_headers=lambda: {"PRIVATE-TOKEN": config.token.get_secret_value()},
+        status_translator=lambda status: _translate_status(status, GITLAB_PROJECT_ID),
+    )
+    provider: typing.Final = GitLabProvider(config=config, project_id=GITLAB_PROJECT_ID, http=http)
     return provider, client
 
 
@@ -54,7 +60,12 @@ def _make_provider_with_retrying_transport(
     retrying: typing.Final = RetryingTransport(inner=inner)
     client: typing.Final = httpx2.Client(transport=retrying, base_url=GITLAB_ENDPOINT)
     config: typing.Final = GitLabConfig(endpoint=GITLAB_ENDPOINT, token=pydantic.SecretStr(GITLAB_TOKEN))
-    provider: typing.Final = GitLabProvider(config=config, project_id=GITLAB_PROJECT_ID, client=client)
+    http: typing.Final = HttpClient(
+        client=client,
+        auth_headers=lambda: {"PRIVATE-TOKEN": config.token.get_secret_value()},
+        status_translator=lambda status: _translate_status(status, GITLAB_PROJECT_ID),
+    )
+    provider: typing.Final = GitLabProvider(config=config, project_id=GITLAB_PROJECT_ID, http=http)
     return provider, client
 
 
@@ -101,7 +112,7 @@ def test_raises_provider_api_error_when_default_branch_response_malformed() -> N
         ("GET", _PROJECT_PATH): httpx2.Response(200, json={"unexpected": "shape"}),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="malformed"):
+    with client, pytest.raises(ProviderAPIError, match="response shape"):
         provider.get_default_branch()
 
 
@@ -110,7 +121,7 @@ def test_raises_provider_api_error_when_default_branch_body_is_not_json() -> Non
         ("GET", _PROJECT_PATH): httpx2.Response(200, text="not json at all"),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="malformed"):
+    with client, pytest.raises(ProviderAPIError, match="malformed JSON"):
         provider.get_default_branch()
 
 
@@ -562,7 +573,7 @@ def test_raises_provider_api_error_when_request_error_chained_from_exc(
         lambda: httpx2.ConnectError("simulated network failure"),
     )
     provider, client = _make_provider_with_retrying_transport(handler)
-    with client, pytest.raises(ProviderAPIError, match="GitLab request failed") as exc_info:
+    with client, pytest.raises(ProviderAPIError, match="request failed") as exc_info:
         verb_callable(provider)
     assert isinstance(exc_info.value.__cause__, httpx2.ConnectError)
 

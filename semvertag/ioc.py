@@ -30,20 +30,27 @@ def _construct_gitlab_provider(
     settings: Settings,
     transport: httpx2.BaseTransport,
 ) -> "GitLabProvider":
-    from semvertag.providers.gitlab import GitLabProvider  # noqa: PLC0415
+    from semvertag.providers._http import HttpClient  # noqa: PLC0415
+    from semvertag.providers.gitlab import GitLabProvider, _translate_status  # noqa: PLC0415
 
     if settings.project_id is None:
         msg = "Project id missing. Set CI_PROJECT_ID or pass --project-id."
         raise ConfigError(msg)
+    project_id: typing.Final = settings.project_id
     client: typing.Final = httpx2.Client(
         transport=transport,
         base_url=settings.gitlab.endpoint,
         timeout=settings.request_timeout,
     )
+    http: typing.Final = HttpClient(
+        client=client,
+        auth_headers=lambda: {"PRIVATE-TOKEN": settings.gitlab.token.get_secret_value()},
+        status_translator=lambda status: _translate_status(status, project_id),
+    )
     return GitLabProvider(
         config=settings.gitlab,
-        project_id=settings.project_id,
-        client=client,
+        project_id=project_id,
+        http=http,
     )
 
 
@@ -70,7 +77,7 @@ def _build_current_strategy(settings: Settings) -> "BumpStrategy":
 
 
 def _close_provider_client(provider: "GitLabProvider") -> None:
-    provider.client.close()
+    provider.http.client.close()
 
 
 class SettingsGroup(modern_di.Group):
