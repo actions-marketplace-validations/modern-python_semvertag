@@ -59,5 +59,12 @@ class HttpClient:
             msg = f"response shape invalid: {exc}"
             raise ProviderAPIError(msg) from exc
 
+    def request_raw(self, method: str, url: str, **kwargs: typing.Any) -> httpx2.Response:  # noqa: ANN401
+        try:
+            return self.client.request(method, url, headers=self.auth_headers(), **kwargs)
+        except httpx2.RequestError as exc:
+            msg = f"request failed: {type(exc).__name__}"
+            raise ProviderAPIError(msg) from exc
+
 
 __all__: typing.Final = ("AuthHeaders", "HttpClient", "StatusTranslator")

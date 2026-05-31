@@ -116,3 +116,50 @@ def test_request_many_translates_dict_payload_to_provider_api_error() -> None:
     http: typing.Final = _build_client(handler)
     with pytest.raises(ProviderAPIError, match="expected list"):
         http.request_many("GET", "/things", schema=_SampleResponse)
+
+
+_TEAPOT_STATUS: typing.Final = 418
+_SERVER_ERROR_STATUS: typing.Final = 500
+
+
+def test_request_raw_returns_response_with_auth_headers_applied() -> None:
+    captured_headers: dict[str, str] = {}
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        captured_headers.update(request.headers)
+        return httpx2.Response(_TEAPOT_STATUS, text="teapot")
+
+    http: typing.Final = _build_client(handler)
+    response: typing.Final = http.request_raw("GET", "/teapot")
+    assert response.status_code == _TEAPOT_STATUS
+    assert response.text == "teapot"
+    assert captured_headers.get("x-test-auth") == "token-xyz"
+
+
+def test_request_raw_does_not_call_status_translator() -> None:
+    call_count = {"n": 0}
+
+    def translator(_status: int) -> None:
+        call_count["n"] += 1
+
+    def handler(_request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(_SERVER_ERROR_STATUS, text="server error")
+
+    http: typing.Final = HttpClient(
+        client=httpx2.Client(transport=httpx2.MockTransport(handler), base_url=_BASE_URL),
+        auth_headers=dict,
+        status_translator=translator,
+    )
+    response: typing.Final = http.request_raw("GET", "/whatever")
+    assert response.status_code == _SERVER_ERROR_STATUS
+    assert call_count["n"] == 0
+
+
+def test_request_raw_translates_request_error_to_provider_api_error() -> None:
+    def handler(_request: httpx2.Request) -> httpx2.Response:
+        msg: typing.Final = "timed out"
+        raise httpx2.ReadTimeout(msg)
+
+    http: typing.Final = _build_client(handler)
+    with pytest.raises(ProviderAPIError, match="request failed"):
+        http.request_raw("GET", "/whatever")
