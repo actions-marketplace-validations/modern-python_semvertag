@@ -43,13 +43,42 @@ _ENV_NESTED_DELIMITER: typing.Final = "__"
 _PROVIDER_ENV_VAR: typing.Final = _ENV_PREFIX + "PROVIDER"
 
 
-class GitLabConfig(pydantic.BaseModel):
+class GitLabConfig(pydantic_settings.BaseSettings):
+    model_config = pydantic_settings.SettingsConfigDict(
+        env_prefix="SEMVERTAG_GITLAB__",
+        case_sensitive=False,
+        extra="ignore",
+        populate_by_name=True,
+    )
+
     endpoint: str = "https://gitlab.com"
-    token: pydantic.SecretStr = pydantic.Field(default=pydantic.SecretStr(""))
+    token: pydantic.SecretStr = pydantic.Field(
+        default=pydantic.SecretStr(""),
+        validation_alias=pydantic.AliasChoices(
+            "SEMVERTAG_GITLAB__TOKEN",
+            "SEMVERTAG_TOKEN",
+            "CI_JOB_TOKEN",
+            "GITLAB_TOKEN",
+        ),
+    )
 
 
-class GitHubConfig(pydantic.BaseModel):
-    token: pydantic.SecretStr = pydantic.Field(default=pydantic.SecretStr(""))
+class GitHubConfig(pydantic_settings.BaseSettings):
+    model_config = pydantic_settings.SettingsConfigDict(
+        env_prefix="SEMVERTAG_GITHUB__",
+        case_sensitive=False,
+        extra="ignore",
+        populate_by_name=True,
+    )
+
+    token: pydantic.SecretStr = pydantic.Field(
+        default=pydantic.SecretStr(""),
+        validation_alias=pydantic.AliasChoices(
+            "SEMVERTAG_GITHUB__TOKEN",
+            "SEMVERTAG_TOKEN",
+            "GITHUB_TOKEN",
+        ),
+    )
 
 
 class Settings(pydantic_settings.BaseSettings):
@@ -64,42 +93,15 @@ class Settings(pydantic_settings.BaseSettings):
     provider: typing.Literal["gitlab", "github", "bitbucket"] = "gitlab"
     default_branch: str | None = None
     request_timeout: float = pydantic.Field(default=8.0, gt=0)
-    project_id: int | None = pydantic.Field(default=None)
+    project_id: int | None = pydantic.Field(
+        default=None,
+        validation_alias=pydantic.AliasChoices("SEMVERTAG_PROJECT_ID", "CI_PROJECT_ID"),
+    )
     quiet: bool = pydantic.Field(default=False)
     gitlab: GitLabConfig = pydantic.Field(default_factory=GitLabConfig)
     github: GitHubConfig = pydantic.Field(default_factory=GitHubConfig)
     branch_prefix: BranchPrefixConfig = pydantic.Field(default_factory=BranchPrefixConfig)
     conventional_commits: ConventionalCommitsConfig = pydantic.Field(default_factory=ConventionalCommitsConfig)
-
-    @pydantic.model_validator(mode="before")
-    @classmethod
-    def _inject_token_aliases(cls, data: typing.Any) -> typing.Any:  # noqa: ANN401
-        if not isinstance(data, dict):
-            return data
-        provider: typing.Final = _resolve_active_provider(data)
-        nested_key: typing.Final = _PROVIDER_TO_NESTED_KEY.get(provider)
-        if nested_key is None:
-            return data
-        aliases: typing.Final = _TOKEN_ALIASES_BY_PATH.get(f"{nested_key}.token")
-        if aliases is None:
-            return data
-        _inject_token(data, nested_key, aliases)
-        return data
-
-    @pydantic.model_validator(mode="before")
-    @classmethod
-    def _inject_top_level_aliases(cls, data: typing.Any) -> typing.Any:  # noqa: ANN401
-        if not isinstance(data, dict):
-            return data
-        for field_name, aliases in _TOP_LEVEL_FIELD_ALIASES.items():
-            if field_name in data and data[field_name] is not None:
-                continue
-            found = _find_aliased_env(aliases)
-            if found is None:
-                continue
-            _matched_alias, value = found
-            data[field_name] = value
-        return data
 
     @pydantic.field_validator("request_timeout")
     @classmethod
