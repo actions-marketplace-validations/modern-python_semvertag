@@ -61,8 +61,8 @@ def install_mock_transport(
     def install(handler: HandlerCallable) -> None:
         transport: typing.Final = httpx2.MockTransport(handler)
 
-        def patched(settings: Settings, *, json: bool = False) -> typing.Any:  # noqa: ANN401
-            return real_build_container(settings, json=json, inner_transport=transport)
+        def patched(settings: Settings) -> typing.Any:  # noqa: ANN401
+            return real_build_container(settings, inner_transport=transport)
 
         monkeypatch.setattr(ioc, "build_container", patched)
 

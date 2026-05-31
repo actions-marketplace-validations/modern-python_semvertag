@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 from semvertag import _transport
 from semvertag.__main__ import MAIN_APP
 from semvertag._errors import SemvertagError
+from semvertag._output import Output
 from semvertag._use_case import SemvertagUseCase
 from tests.conftest import HandlerCallable
 from tests.integration.conftest import (
@@ -112,11 +113,11 @@ def test_exits_with_one_on_generic_semvertag_error(
 ) -> None:
     install_mock_transport(merge_commit_handler())
 
-    def raising_run(self: SemvertagUseCase) -> typing.Any:  # noqa: ANN401, ARG001
+    def raising_call(self: SemvertagUseCase, *, output: Output) -> typing.Any:  # noqa: ANN401, ARG001
         msg = "synthetic generic failure for AC9."
         raise SemvertagError(msg)
 
-    monkeypatch.setattr(SemvertagUseCase, "run", raising_run)
+    monkeypatch.setattr(SemvertagUseCase, "__call__", raising_call)
 
     result: typing.Final = cli_runner.invoke(MAIN_APP, [])
 

@@ -19,19 +19,19 @@ _ALREADY_TAGGED_REASON: typing.Final = "Latest commit already tagged."
 class SemvertagUseCase:
     provider: Provider
     strategy: BumpStrategy
-    output: Output
 
-    def run(self) -> RunResult:
-        self.output.progress(f"Detected strategy: {self.strategy.name}")
-        self.output.progress("Fetching latest commit on default branch...")
+    def __call__(self, *, output: Output) -> RunResult:
+        output.progress(f"Detected strategy: {self.strategy.name}")
+        output.progress("Fetching latest commit on default branch...")
         commit: typing.Final = self.provider.get_latest_commit_on_default_branch()
 
-        self.output.progress("Fetching tag history...")
+        output.progress("Fetching tag history...")
         tags: typing.Final = self.provider.list_tags()
         latest_semver_tag: typing.Final = _pick_latest_semver_tag(tags)
 
         if latest_semver_tag is None:
             return self._emit(
+                output=output,
                 bump=Bump.NONE,
                 status="no_tags",
                 tag=None,
@@ -41,6 +41,7 @@ class SemvertagUseCase:
 
         if latest_semver_tag.commit_sha == commit.sha:
             return self._emit(
+                output=output,
                 bump=Bump.NONE,
                 status="already_tagged",
                 tag=latest_semver_tag.name,
@@ -48,10 +49,11 @@ class SemvertagUseCase:
                 reason=_ALREADY_TAGGED_REASON,
             )
 
-        self.output.progress("Computing bump...")
+        output.progress("Computing bump...")
         bump: typing.Final = self.strategy.decide(commit)
         if bump is Bump.NONE:
             return self._emit(
+                output=output,
                 bump=Bump.NONE,
                 status=_status_for_no_bump(self.strategy.name),
                 tag=None,
@@ -60,9 +62,10 @@ class SemvertagUseCase:
             )
 
         new_version: typing.Final = _compute_new_version(latest_semver_tag, bump)
-        self.output.progress(f"Creating tag {new_version}...")
+        output.progress(f"Creating tag {new_version}...")
         self.provider.create_tag(name=new_version, commit_sha=commit.sha)
         return self._emit(
+            output=output,
             bump=bump,
             status="created",
             tag=new_version,
@@ -70,9 +73,10 @@ class SemvertagUseCase:
             reason=None,
         )
 
-    def _emit(
+    def _emit(  # noqa: PLR0913
         self,
         *,
+        output: Output,
         bump: Bump,
         status: str,
         tag: str | None,
@@ -87,7 +91,7 @@ class SemvertagUseCase:
             commit=commit,
             reason=reason,
         )
-        self.output.emit(result)
+        output.emit(result)
         return result
 
 

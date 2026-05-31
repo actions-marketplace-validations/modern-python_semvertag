@@ -7,10 +7,6 @@ from semvertag._types import Bump, CheckResult, Commit, RunResult, Tag
 from semvertag._use_case import SemvertagUseCase
 
 
-if typing.TYPE_CHECKING:
-    from semvertag._output import Output
-
-
 _MERGE_MESSAGE: typing.Final = "Merge branch 'feature/foo' into main"
 _NON_MERGE_MESSAGE: typing.Final = "Fix typo in README"
 _LATEST_SHA: typing.Final = "abc1234"
@@ -95,7 +91,6 @@ def _make_use_case(
     use_case: typing.Final = SemvertagUseCase(
         provider=typing.cast("typing.Any", provider),
         strategy=typing.cast("typing.Any", strategy),
-        output=typing.cast("Output", output),
     )
     return use_case, provider, output
 
@@ -103,7 +98,7 @@ def _make_use_case(
 def test_creates_tag_with_minor_bump_when_feature_merge_against_prior_semver_tag() -> None:
     use_case, provider, output = _make_use_case()
 
-    result: typing.Final = use_case.run()
+    result: typing.Final = use_case(output=output)
 
     assert result.status == "created"
     assert result.tag == _EXPECTED_NEW_TAG
@@ -116,11 +111,11 @@ def test_creates_tag_with_minor_bump_when_feature_merge_against_prior_semver_tag
 
 
 def test_skips_with_already_tagged_when_latest_commit_sha_matches_a_tag() -> None:
-    use_case, provider, _output = _make_use_case(
+    use_case, provider, output = _make_use_case(
         tags=[Tag(name=_LATEST_TAG_NAME, commit_sha=_LATEST_SHA)],
     )
 
-    result: typing.Final = use_case.run()
+    result: typing.Final = use_case(output=output)
 
     assert result.status == "already_tagged"
     assert result.tag == _LATEST_TAG_NAME
@@ -129,12 +124,12 @@ def test_skips_with_already_tagged_when_latest_commit_sha_matches_a_tag() -> Non
 
 
 def test_skips_with_no_merge_commit_under_branch_prefix_when_bump_is_none() -> None:
-    use_case, provider, _output = _make_use_case(
+    use_case, provider, output = _make_use_case(
         commit_message=_NON_MERGE_MESSAGE,
         bump=Bump.NONE,
     )
 
-    result: typing.Final = use_case.run()
+    result: typing.Final = use_case(output=output)
 
     assert result.status == "no_merge_commit"
     assert result.bump == "none"
@@ -144,22 +139,22 @@ def test_skips_with_no_merge_commit_under_branch_prefix_when_bump_is_none() -> N
 
 
 def test_skips_with_no_conforming_commit_under_conventional_commits_when_bump_is_none() -> None:
-    use_case, _provider, _output = _make_use_case(
+    use_case, _provider, output = _make_use_case(
         commit_message="random text",
         bump=Bump.NONE,
         strategy_name=_CONVENTIONAL_STRATEGY,
     )
 
-    result: typing.Final = use_case.run()
+    result: typing.Final = use_case(output=output)
 
     assert result.status == "no_conforming_commit"
     assert result.strategy == _CONVENTIONAL_STRATEGY
 
 
 def test_skips_with_no_tags_when_no_semver_conforming_tags_exist() -> None:
-    use_case, provider, _output = _make_use_case(tags=[])
+    use_case, provider, output = _make_use_case(tags=[])
 
-    result: typing.Final = use_case.run()
+    result: typing.Final = use_case(output=output)
 
     assert result.status == "no_tags"
     assert result.tag is None
@@ -168,20 +163,20 @@ def test_skips_with_no_tags_when_no_semver_conforming_tags_exist() -> None:
 
 
 def test_skips_with_no_tags_when_only_non_semver_tags_exist() -> None:
-    use_case, _provider, _output = _make_use_case(
+    use_case, _provider, output = _make_use_case(
         tags=[
             Tag(name="release-2024-Q1", commit_sha="aaa"),
             Tag(name="latest", commit_sha="bbb"),
         ],
     )
 
-    result: typing.Final = use_case.run()
+    result: typing.Final = use_case(output=output)
 
     assert result.status == "no_tags"
 
 
 def test_picks_highest_semver_tag_not_first_in_list_when_computing_bump() -> None:
-    use_case, provider, _output = _make_use_case(
+    use_case, provider, output = _make_use_case(
         tags=[
             Tag(name="0.5.0", commit_sha="x"),
             Tag(name="2.0.0", commit_sha=_PRIOR_SHA),
@@ -190,7 +185,7 @@ def test_picks_highest_semver_tag_not_first_in_list_when_computing_bump() -> Non
         bump=Bump.PATCH,
     )
 
-    result: typing.Final = use_case.run()
+    result: typing.Final = use_case(output=output)
 
     assert result.tag == "2.0.1"
     assert provider.create_tag_calls == [("2.0.1", _LATEST_SHA)]
@@ -205,15 +200,15 @@ def test_picks_highest_semver_tag_not_first_in_list_when_computing_bump() -> Non
     ],
 )
 def test_bump_arithmetic_dispatches_to_semver_bump_kind(bump: Bump, expected_tag: str) -> None:
-    use_case, _provider, _output = _make_use_case(bump=bump)
-    result: typing.Final = use_case.run()
+    use_case, _provider, output = _make_use_case(bump=bump)
+    result: typing.Final = use_case(output=output)
     assert result.tag == expected_tag
     assert result.bump == bump.value
 
 
 def test_progress_messages_fire_before_each_phase() -> None:
     _use_case, _provider, output = _make_use_case()
-    _use_case.run()
+    _use_case(output=output)
     assert any("Detected strategy" in msg for msg in output.progress_messages)
     assert any("Fetching" in msg for msg in output.progress_messages)
     assert any("Computing bump" in msg for msg in output.progress_messages)

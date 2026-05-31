@@ -5,7 +5,6 @@ import modern_di
 from modern_di import Scope, providers
 
 from semvertag._errors import ConfigError
-from semvertag._output import JsonOutput, RichOutput, build_json_output, build_rich_output
 from semvertag._settings import Settings
 from semvertag._transport import RetryingTransport
 from semvertag._use_case import SemvertagUseCase
@@ -16,14 +15,6 @@ if typing.TYPE_CHECKING:
     from semvertag.strategies._base import BumpStrategy
     from semvertag.strategies.branch_prefix import BranchPrefixStrategy
     from semvertag.strategies.conventional_commits import ConventionalCommitsStrategy
-
-
-def _build_rich_output(settings: Settings) -> RichOutput:
-    return build_rich_output(quiet=settings.quiet)
-
-
-def _build_json_output(settings: Settings) -> JsonOutput:
-    return build_json_output(quiet=settings.quiet)
 
 
 def _construct_gitlab_provider(
@@ -84,23 +75,6 @@ class SettingsGroup(modern_di.Group):
     settings = providers.ContextProvider(scope=Scope.APP, context_type=Settings)
 
 
-class OutputsGroup(modern_di.Group):
-    rich_output = providers.Factory(
-        scope=Scope.APP,
-        creator=_build_rich_output,
-        kwargs={"settings": SettingsGroup.settings},
-        skip_creator_parsing=True,
-        bound_type=None,
-    )
-    json_output = providers.Factory(
-        scope=Scope.APP,
-        creator=_build_json_output,
-        kwargs={"settings": SettingsGroup.settings},
-        skip_creator_parsing=True,
-        bound_type=None,
-    )
-
-
 class ProvidersGroup(modern_di.Group):
     gitlab_provider = providers.Factory(
         scope=Scope.APP,
@@ -143,7 +117,6 @@ class UseCasesGroup(modern_di.Group):
         kwargs={
             "provider": ProvidersGroup.gitlab_provider,
             "strategy": StrategiesGroup.current_strategy,
-            "output": OutputsGroup.rich_output,
         },
         skip_creator_parsing=True,
         bound_type=SemvertagUseCase,
@@ -152,7 +125,6 @@ class UseCasesGroup(modern_di.Group):
 
 ALL_GROUPS: typing.Final[list[type[modern_di.Group]]] = [
     SettingsGroup,
-    OutputsGroup,
     ProvidersGroup,
     StrategiesGroup,
     UseCasesGroup,
@@ -162,7 +134,6 @@ ALL_GROUPS: typing.Final[list[type[modern_di.Group]]] = [
 def build_container(
     settings: Settings,
     *,
-    json: bool = False,
     inner_transport: httpx2.BaseTransport | None = None,
 ) -> modern_di.Container:
     if settings.provider != "gitlab":
@@ -175,15 +146,11 @@ def build_container(
     if inner_transport is not None:
         provider_instance: typing.Final = _construct_gitlab_provider(settings, inner_transport)
         container.override(ProvidersGroup.gitlab_provider, provider_instance)
-    if json:
-        json_instance: typing.Final = _build_json_output(settings)
-        container.override(OutputsGroup.rich_output, json_instance)
     return container
 
 
 __all__: typing.Final = (
     "ALL_GROUPS",
-    "OutputsGroup",
     "ProvidersGroup",
     "SettingsGroup",
     "StrategiesGroup",

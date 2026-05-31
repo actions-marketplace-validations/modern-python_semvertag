@@ -1,4 +1,3 @@
-import dataclasses
 import errno
 import importlib.metadata
 import typing
@@ -10,7 +9,6 @@ from semvertag import ioc
 from semvertag._errors import ConfigError, SemvertagError
 from semvertag._output import Output, build_json_output, build_rich_output
 from semvertag._settings import Settings, apply_cli_overlay
-from semvertag._use_case import SemvertagUseCase
 
 
 _PACKAGE_NAME: typing.Final = "semvertag"
@@ -147,10 +145,10 @@ def _main_callback(  # noqa: PLR0913
         except ValueError as exc:
             raise ConfigError(str(exc)) from exc
         output = _build_output_for_flags(quiet=settings.quiet, json_flag=json_flag)
-        container = ioc.build_container(settings, json=json_flag)
+        container = ioc.build_container(settings)
         with container:
             use_case = container.resolve_provider(ioc.UseCasesGroup.semvertag_use_case)
-            _run_with_output_override(use_case, output)
+            use_case(output=output)
     except pydantic.ValidationError as exc:
         err = _config_error_from_validation(exc)
         output.error(str(err))
@@ -168,10 +166,6 @@ def _main_callback(  # noqa: PLR0913
         if exc.errno == errno.EPIPE:
             raise typer.Exit(code=0) from exc
         raise
-
-
-def _run_with_output_override(use_case: SemvertagUseCase, output: Output) -> None:
-    dataclasses.replace(use_case, output=output).run()
 
 
 def main() -> None:
