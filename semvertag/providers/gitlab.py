@@ -368,8 +368,4 @@ def _same_origin(url: str, endpoint: str) -> bool:
     return parsed.scheme == expected.scheme and parsed.netloc == expected.netloc
 
 
-def _request_failed_message(exc: httpx2.RequestError) -> str:
-    return f"GitLab request failed: {type(exc).__name__}. Check SEMVERTAG_GITLAB__ENDPOINT and network connectivity."
-
-
 __all__: typing.Final = ("GitLabProvider",)
