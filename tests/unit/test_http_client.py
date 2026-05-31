@@ -55,3 +55,21 @@ def test_request_translates_malformed_json_to_provider_api_error() -> None:
     http: typing.Final = _build_client(handler)
     with pytest.raises(ProviderAPIError, match="malformed JSON"):
         http.request("GET", "/things/1", schema=_SampleResponse)
+
+
+def test_request_translates_missing_field_to_provider_api_error() -> None:
+    def handler(_request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json={"name": "alice"})  # missing 'count'
+
+    http: typing.Final = _build_client(handler)
+    with pytest.raises(ProviderAPIError, match="response shape"):
+        http.request("GET", "/things/1", schema=_SampleResponse)
+
+
+def test_request_translates_wrong_field_type_to_provider_api_error() -> None:
+    def handler(_request: httpx2.Request) -> httpx2.Response:
+        return httpx2.Response(200, json={"name": "alice", "count": "seven"})
+
+    http: typing.Final = _build_client(handler)
+    with pytest.raises(ProviderAPIError, match="response shape"):
+        http.request("GET", "/things/1", schema=_SampleResponse)
