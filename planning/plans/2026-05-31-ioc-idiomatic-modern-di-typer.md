@@ -8,7 +8,7 @@
 
 **Tech Stack:** `modern-di`, `modern-di-typer`, `typer`, `pydantic-settings`, `pytest`, `httpx2`. No new deps.
 
-**Spec:** `docs/superpowers/specs/2026-05-31-ioc-idiomatic-modern-di-typer-design.md`
+**Spec:** `planning/specs/2026-05-31-ioc-idiomatic-modern-di-typer-design.md`
 
 ---
 

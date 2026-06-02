@@ -4,8 +4,8 @@
 
 This project uses **Superpowers** (brainstorm → plan → TDD → review).
 
-- Brainstorm specs live in `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`.
-- Implementation plans live in `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`.
+- Brainstorm specs live in `planning/specs/YYYY-MM-DD-<topic>-design.md`.
+- Implementation plans live in `planning/plans/YYYY-MM-DD-<topic>.md`.
 - Use TDD by default: red, green, refactor. Tests before implementation.
 - Use git worktrees for feature isolation (`superpowers:using-git-worktrees`).
 - Use the verification gate before claiming work complete

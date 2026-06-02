@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.10+, `pytest`, `ty`, `ruff`, `uv`, `just`. Nothing new.
 
-**Spec:** `docs/superpowers/specs/2026-05-31-drop-doctor-design.md`
+**Spec:** `planning/specs/2026-05-31-drop-doctor-design.md`
 
 ---
 
@@ -543,7 +543,7 @@ Dispatch a code-review subagent against the worktree branch. Review scope: the f
 
 Brief the reviewer on:
 - The work is purely deletion; expect no new code.
-- The spec is at `docs/superpowers/specs/2026-05-31-drop-doctor-design.md`.
+- The spec is at `planning/specs/2026-05-31-drop-doctor-design.md`.
 - The Section 2 table of "doctor failure mode → main command equivalent" is the load-bearing assumption; ask them to verify the main command's typed errors really do produce the listed exit codes.
 - Don't re-litigate the decision to remove doctor (already agreed).
 

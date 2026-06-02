@@ -55,8 +55,8 @@ once the wrapper has validated the new workflow.
 ### New directories
 
 ```
-docs/superpowers/specs/   — brainstorm outputs (one per piece of work)
-docs/superpowers/plans/   — writing-plans outputs (one per spec)
+planning/specs/   — brainstorm outputs (one per piece of work)
+planning/plans/   — writing-plans outputs (one per spec)
 ```
 
 `specs/` is created as part of writing this spec (it lives there). `plans/` is
@@ -71,7 +71,7 @@ There is no repo-level `CLAUDE.md` today (only the user-global one). Add one,
 - Workflow is Superpowers: brainstorm → writing-plans → executing-plans (or
   subagent-driven-development), with TDD by default, worktrees for feature
   isolation, code-review subagents, verification-before-completion gates.
-- Spec/plan locations: `docs/superpowers/specs/` and `docs/superpowers/plans/`.
+- Spec/plan locations: `planning/specs/` and `planning/plans/`.
 - `_archive/bmad/` is reference-only — historical decisions, do not edit, do
   not extend.
 - `_autosemver_reference/` is behavioral reference only (existing convention).
@@ -217,7 +217,7 @@ do today).
 Direct-to-`main`, no worktree, no PR. Mechanical, low-risk, not subject to TDD.
 
 1. `chore: archive _bmad/ as reference` — `git mv _bmad _archive/bmad`.
-2. `chore: track empty docs/superpowers/plans/` — `plans/` was created during
+2. `chore: track empty planning/plans/` — `plans/` was created during
    this brainstorm but is empty; add a `.gitkeep` so it tracks. (`specs/`
    already tracks because this spec lives in it.)
 3. `docs: add project CLAUDE.md` — the 30–50 line file described in Section 1.
@@ -288,7 +288,7 @@ Spawn a worktree (`using-git-worktrees` skill). Inside the worktree:
 This spec is "done" when **all** of the following hold:
 
 - `_bmad/` is gone from the working tree (lives at `_archive/bmad/`).
-- `docs/superpowers/specs/` contains this spec and the implementation plan
+- `planning/specs/` contains this spec and the implementation plan
   derived from it.
 - Repo-root `CLAUDE.md` exists and points at the Superpowers flow.
 - `HttpClient` exists in `semvertag/providers/` (or chosen location) and is

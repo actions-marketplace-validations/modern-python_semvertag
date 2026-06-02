@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.10+, `httpx2`, `pydantic` (already transitive via `pydantic-settings`), `pytest`, `modern-di`, `ty` (type checker), `ruff`, `uv`.
 
-**Spec:** `docs/superpowers/specs/2026-05-31-bmad-to-superpowers-migration-and-httpx2-wrapper-design.md`
+**Spec:** `planning/specs/2026-05-31-bmad-to-superpowers-migration-and-httpx2-wrapper-design.md`
 
 ---
 
@@ -79,7 +79,7 @@ Expected: shows the new commit; `_bmad/` no longer appears in `git ls-files`.
 **Files:**
 - Create: `CLAUDE.md` (repo root)
 
-`docs/superpowers/plans/.gitkeep` already exists (committed during the brainstorm in `37aeb6b`); no work needed there.
+`planning/plans/.gitkeep` already exists (committed during the brainstorm in `37aeb6b`); no work needed there.
 
 - [ ] **Step 1: Write `CLAUDE.md`**
 
@@ -92,8 +92,8 @@ Create `/Users/kevinsmith/src/pypi/autosemver/CLAUDE.md` with this exact content
 
 This project uses **Superpowers** (brainstorm → plan → TDD → review).
 
-- Brainstorm specs live in `docs/superpowers/specs/YYYY-MM-DD-<topic>-design.md`.
-- Implementation plans live in `docs/superpowers/plans/YYYY-MM-DD-<topic>.md`.
+- Brainstorm specs live in `planning/specs/YYYY-MM-DD-<topic>-design.md`.
+- Implementation plans live in `planning/plans/YYYY-MM-DD-<topic>.md`.
 - Use TDD by default: red, green, refactor. Tests before implementation.
 - Use git worktrees for feature isolation (`superpowers:using-git-worktrees`).
 - Use the verification gate before claiming work complete
@@ -1365,8 +1365,8 @@ Expected: all green on `main`.
 When all tasks above are done:
 
 - `_bmad/` is gone from the working tree (lives at `_archive/bmad/`).
-- `docs/superpowers/specs/` contains the migration spec.
-- `docs/superpowers/plans/` contains this plan (and `.gitkeep`).
+- `planning/specs/` contains the migration spec.
+- `planning/plans/` contains this plan (and `.gitkeep`).
 - Repo-root `CLAUDE.md` exists and points at the Superpowers flow.
 - `semvertag/providers/_http.py` contains `HttpClient`, used by every method in `gitlab.py` directly or via `_safe_get`.
 - All existing tests pass; no behavior changes to the GitLab provider's external contract.

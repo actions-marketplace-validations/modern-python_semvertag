@@ -8,7 +8,7 @@
 
 **Tech Stack:** `pydantic`, `pydantic-settings`. Both already project deps; no new packages.
 
-**Spec:** `docs/superpowers/specs/2026-05-31-settings-aliaschoices-design.md`
+**Spec:** `planning/specs/2026-05-31-settings-aliaschoices-design.md`
 
 ---
 
@@ -466,7 +466,7 @@ Dispatch a code-review subagent against the worktree branch (2 commits between `
 
 Brief the reviewer on:
 - The work is a refactor: machinery replacement, no behavior change.
-- The spec is at `docs/superpowers/specs/2026-05-31-settings-aliaschoices-design.md`. The "Semantic shift to be aware of" section is the one place behavior changes (both providers' tokens populated even when only one is active); confirm the reviewer accepts this is the intended trade-off.
+- The spec is at `planning/specs/2026-05-31-settings-aliaschoices-design.md`. The "Semantic shift to be aware of" section is the one place behavior changes (both providers' tokens populated even when only one is active); confirm the reviewer accepts this is the intended trade-off.
 - Existing tests in `tests/unit/test_settings.py` should pass unchanged. If they had to be modified, that's a regression.
 - The 6 smoke-test outputs from Task 4 Step 6 are the practical contract.
 

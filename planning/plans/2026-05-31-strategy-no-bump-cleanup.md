@@ -8,7 +8,7 @@
 
 **Tech Stack:** Existing — `dataclasses`, `typing.Protocol`, `typing.ClassVar`. No new deps.
 
-**Spec:** `docs/superpowers/specs/2026-05-31-strategy-no-bump-cleanup-design.md`
+**Spec:** `planning/specs/2026-05-31-strategy-no-bump-cleanup-design.md`
 
 ---
 

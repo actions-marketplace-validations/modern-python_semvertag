@@ -8,7 +8,7 @@
 
 **Tech Stack:** `pydantic`, `pydantic-settings`. No new deps.
 
-**Spec:** `docs/superpowers/specs/2026-05-31-cli-overlay-simplification-design.md`
+**Spec:** `planning/specs/2026-05-31-cli-overlay-simplification-design.md`
 
 ---
 

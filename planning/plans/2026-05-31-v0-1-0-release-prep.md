@@ -8,7 +8,7 @@
 
 **Tech Stack:** Existing — pydantic-settings, typer, modern-di-typer, mkdocs, uv. No new deps.
 
-**Spec:** `docs/superpowers/specs/2026-05-31-v0-1-0-release-prep-design.md`
+**Spec:** `planning/specs/2026-05-31-v0-1-0-release-prep-design.md`
 
 ---
 

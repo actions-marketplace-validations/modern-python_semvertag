@@ -8,7 +8,7 @@
 
 **Tech Stack:** Existing — `pydantic`, `pydantic-settings`, `modern-di`, `typer`, `httpx2`, `pytest`. No new deps.
 
-**Spec:** `docs/superpowers/specs/2026-05-31-usecase-callable-design.md`
+**Spec:** `planning/specs/2026-05-31-usecase-callable-design.md`
 
 ---
 
