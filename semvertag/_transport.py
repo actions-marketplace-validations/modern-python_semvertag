@@ -27,7 +27,8 @@ class RetryingTransport(httpx2.BaseTransport):
         start: typing.Final = time.monotonic()
         last_response: httpx2.Response | None = None
         last_exc: BaseException | None = None
-        for attempt in range(MAX_ATTEMPTS):
+        attempt = 0
+        while True:
             try:
                 response = self._inner.handle_request(request)
             except RETRYABLE_EXCEPTIONS as exc:
@@ -42,12 +43,11 @@ class RetryingTransport(httpx2.BaseTransport):
             if time.monotonic() - start + sleep_seconds > MAX_WALL_SECONDS:
                 break
             time.sleep(sleep_seconds)
+            attempt += 1
         if last_response is not None:
             return last_response
-        if last_exc is not None:
-            raise last_exc
-        msg = "RetryingTransport loop invariant violated"  # pragma: no cover
-        raise RuntimeError(msg)  # pragma: no cover
+        assert last_exc is not None  # noqa: S101
+        raise last_exc
 
     def close(self) -> None:
         self._inner.close()

@@ -11,7 +11,13 @@ from semvertag._transport import RetryingTransport
 from semvertag._types import Commit, Tag
 from semvertag.providers._base import Provider
 from semvertag.providers._http import HttpClient
-from semvertag.providers.gitlab import GitLabProvider, _translate_status, gitlab_auth_headers
+from semvertag.providers.gitlab import (
+    GitLabProvider,
+    _next_page_url,
+    _parse_rel_values,
+    _translate_status,
+    gitlab_auth_headers,
+)
 from tests.conftest import (
     GITLAB_ENDPOINT,
     GITLAB_PROJECT_ID,
@@ -569,3 +575,41 @@ def test_raises_provider_api_error_when_request_error_chained_from_exc(
     with client, pytest.raises(ProviderAPIError, match="request failed") as exc_info:
         verb_callable(provider)
     assert isinstance(exc_info.value.__cause__, httpx2.ConnectError)
+
+
+# Status translator + Link-header parser edge cases
+
+
+_TEAPOT_STATUS: typing.Final = 418
+
+
+def test_translate_status_raises_provider_api_error_for_unknown_status() -> None:
+    with pytest.raises(ProviderAPIError, match="Unexpected GitLab response: 418"):
+        _translate_status(_TEAPOT_STATUS, GITLAB_PROJECT_ID)
+
+
+def _link_header_response(link_header: str) -> httpx2.Response:
+    return httpx2.Response(200, headers={"link": link_header}, json=[])
+
+
+def test_next_page_url_skips_entries_with_empty_uri_reference() -> None:
+    response: typing.Final = _link_header_response('<>; rel="next"')
+    assert _next_page_url(response, current_url=f"{GITLAB_ENDPOINT}{_TAGS_PATH}") is None
+
+
+def test_next_page_url_returns_none_when_link_header_absent() -> None:
+    response: typing.Final = httpx2.Response(200, json=[])
+    assert _next_page_url(response, current_url=f"{GITLAB_ENDPOINT}{_TAGS_PATH}") is None
+
+
+def test_next_page_url_returns_none_when_only_non_next_rel_present() -> None:
+    response: typing.Final = _link_header_response(f'<{GITLAB_ENDPOINT}{_TAGS_PATH}?page=1>; rel="prev"')
+    assert _next_page_url(response, current_url=f"{GITLAB_ENDPOINT}{_TAGS_PATH}") is None
+
+
+def test_parse_rel_values_returns_empty_set_when_no_rel_param_present() -> None:
+    assert _parse_rel_values("; foo=bar; baz=qux") == set()
+
+
+def test_parse_rel_values_skips_non_rel_params_before_finding_rel() -> None:
+    assert _parse_rel_values('; foo="bar"; rel="next"') == {"next"}
