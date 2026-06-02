@@ -21,3 +21,4 @@ dist/
 plan.md
 /site/
 /.worktrees/
+uv.lock

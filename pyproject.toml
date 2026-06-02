@@ -33,7 +33,7 @@ repository = "https://github.com/modern-python/semvertag"
 docs = "https://semvertag.readthedocs.io"
 
 [build-system]
-requires = ["uv_build"]
+requires = ["uv_build>=0.11,<1"]
 build-backend = "uv_build"
 
 [tool.uv.build-backend]
@@ -58,7 +58,6 @@ fix = true
 unsafe-fixes = true
 line-length = 120
 target-version = "py310"
-extend-exclude = ["docs", "_autosemver_reference", "_archive/bmad"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -84,10 +83,6 @@ addopts = "--cov=. --cov-report term-missing"
 testpaths = ["tests"]
 
 [tool.coverage.report]
-exclude_also = ["if typing.TYPE_CHECKING:", "if TYPE_CHECKING:"]
-
-[tool.coverage.run]
-omit = ["_autosemver_reference/*", "_archive/bmad/*", "tests/*"]
-
-[tool.ty.src]
-exclude = ["_autosemver_reference", "_archive/bmad", "docs"]
+exclude_also = [
+    "if typing.TYPE_CHECKING:",
+]
