@@ -12,7 +12,6 @@ from semvertag import ioc
 from semvertag.__main__ import MAIN_APP, _main_callback
 from semvertag._errors import ProviderAPIError
 from semvertag._output import Output
-from semvertag._types import RunResult
 from tests.conftest import HandlerCallable
 from tests.integration.conftest import merge_commit_handler
 
@@ -25,7 +24,7 @@ class _RaisingUseCase:
     def __init__(self, exc: BaseException) -> None:
         self._exc = exc
 
-    def __call__(self, *, output: Output) -> RunResult:  # noqa: ARG002
+    def __call__(self, *, output: Output) -> typing.NoReturn:  # noqa: ARG002
         raise self._exc
 
 
@@ -139,7 +138,13 @@ def test_semvertag_error_from_use_case_exits_with_its_exit_code(
     assert "upstream blew up" in (result.stderr or "") + result.output
 
 
-def test_main_callback_returns_early_when_resilient_parsing_active() -> None:
+def test_main_callback_returns_early_when_resilient_parsing_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_constructed() -> typing.NoReturn:
+        pytest.fail("Settings must not be constructed during resilient_parsing")
+
+    monkeypatch.setattr("semvertag.__main__.Settings", fail_if_constructed)
     ctx = unittest.mock.MagicMock()
     ctx.resilient_parsing = True
     _main_callback(
@@ -152,7 +157,6 @@ def test_main_callback_returns_early_when_resilient_parsing_active() -> None:
         request_timeout=None,
         _version=None,
     )
-    ctx.modern_di_container.assert_not_called()
 
 
 def test_main_entry_point_runs_typer_app_inside_ioc_container(
