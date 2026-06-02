@@ -1,4 +1,3 @@
-import errno
 import importlib.metadata
 import typing
 
@@ -163,10 +162,6 @@ def _tag_command(
         raise typer.Exit(code=err.exit_code) from err
     except BrokenPipeError as exc:
         raise typer.Exit(code=0) from exc
-    except OSError as exc:
-        if exc.errno == errno.EPIPE:
-            raise typer.Exit(code=0) from exc
-        raise
 
 
 def main() -> None:

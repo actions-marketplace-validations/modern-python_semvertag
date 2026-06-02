@@ -3,7 +3,7 @@ import typing
 import pydantic
 import pytest
 
-from semvertag._settings import GitLabConfig, Settings
+from semvertag._settings import GitLabConfig, Settings, apply_cli_overlay
 
 
 _NESTED_TOKEN: typing.Final = "tok-nested"
@@ -144,3 +144,10 @@ def test_prefers_semvertag_project_id_over_ci_project_id(
     monkeypatch.setenv("CI_PROJECT_ID", _PROJECT_ID_CI)
     settings: typing.Final = Settings()
     assert settings.project_id == _PROJECT_ID_INT_SEMVERTAG
+
+
+@pytest.mark.usefixtures("clean_settings_env")
+def test_apply_cli_overlay_rejects_keys_deeper_than_two_levels() -> None:
+    base: typing.Final = Settings()
+    with pytest.raises(ValueError, match="exceeds nesting depth 2"):
+        apply_cli_overlay(base, {"gitlab.foo.bar": "x"})

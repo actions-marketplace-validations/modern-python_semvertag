@@ -10,7 +10,7 @@ import pathlib
 import sys
 import typing
 
-import yaml  # ty: ignore[unresolved-import]  # provided at runtime via `uv run --with pyyaml`
+import yaml
 
 
 _DIGEST_MARKER: typing.Final = "@sha256:"
@@ -116,5 +116,5 @@ def main(argv: list[str]) -> None:
     sys.stdout.write(f"{argv[1]} shape OK\n")
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main(sys.argv)

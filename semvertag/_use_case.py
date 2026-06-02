@@ -115,13 +115,13 @@ def _try_parse_semver(name: str) -> semver.Version | None:
         return None
 
 
+_BUMP_FUNCTIONS: typing.Final[dict[Bump, typing.Callable[[semver.Version], semver.Version]]] = {
+    Bump.MAJOR: semver.Version.bump_major,
+    Bump.MINOR: semver.Version.bump_minor,
+    Bump.PATCH: semver.Version.bump_patch,
+}
+
+
 def _compute_new_version(last_tag: Tag, bump: Bump) -> str:
     version: typing.Final = semver.Version.parse(last_tag.name)
-    if bump is Bump.MAJOR:
-        return str(version.bump_major())
-    if bump is Bump.MINOR:
-        return str(version.bump_minor())
-    if bump is Bump.PATCH:
-        return str(version.bump_patch())
-    msg = f"Cannot compute new version for bump={bump!r}."
-    raise ValueError(msg)
+    return str(_BUMP_FUNCTIONS[bump](version))
