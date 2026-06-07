@@ -41,24 +41,19 @@
 ## Task 1: Add httpware dependency
 
 **Files:**
-- Modify: `pyproject.toml:19-26` (the `dependencies` array)
+- Modify: `pyproject.toml` — `dependencies` array, `requires-python`, `classifiers`
 
-- [ ] **Step 1: Add the dependency**
+**Background:** httpware 0.8.0 ships with `requires-python = ">=3.11,<4"`. semvertag currently declares `>=3.10,<4` and lists Python 3.10 in `classifiers`. Adopting httpware forces semvertag to drop 3.10 support. This is a deliberate pre-1.0 breaking change, explicitly approved at plan-execution time.
 
-Edit `pyproject.toml`, change:
+- [ ] **Step 1: Update `pyproject.toml`**
 
-```toml
-dependencies = [
-    "typer",
-    "rich",
-    "semver",
-    "pydantic-settings",
-    "modern-di-typer",
-    "httpx2",
-]
-```
+Three coordinated edits:
 
-to:
+1. Bump `requires-python` from `">=3.10,<4"` to `">=3.11,<4"`.
+2. Remove `"Programming Language :: Python :: 3.10"` from `classifiers`.
+3. Add `"httpware[pydantic]"` as the last entry of `dependencies`.
+
+Resulting `dependencies` array:
 
 ```toml
 dependencies = [
