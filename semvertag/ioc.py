@@ -1,39 +1,39 @@
 import typing
 
-import httpx2
+import httpware
 import modern_di
 from modern_di import Scope, providers
 
 from semvertag._errors import ConfigError
 from semvertag._settings import Settings
-from semvertag._transport import RetryingTransport
 from semvertag._use_case import SemvertagUseCase
-from semvertag.providers._http import HttpClient
-from semvertag.providers.gitlab import GitLabProvider, _translate_status, gitlab_auth_headers
+from semvertag.providers.gitlab import GitLabProvider
 from semvertag.strategies._base import BumpStrategy
 from semvertag.strategies.branch_prefix import BranchPrefixStrategy
 from semvertag.strategies.conventional_commits import ConventionalCommitsStrategy
 
 
-def _build_gitlab_provider(settings: Settings, transport: httpx2.BaseTransport) -> GitLabProvider:
+_TOKEN_HEADER: typing.Final = "PRIVATE-TOKEN"
+_RETRY_STATUS_CODES: typing.Final = frozenset({408, 429, 500, 502, 503, 504})
+
+
+def _build_gitlab_client(settings: Settings) -> httpware.Client:
+    return httpware.Client(
+        base_url=settings.gitlab.endpoint,
+        timeout=settings.request_timeout,
+        headers={_TOKEN_HEADER: settings.gitlab.token.get_secret_value()},
+        middleware=[httpware.Retry(retry_status_codes=_RETRY_STATUS_CODES)],
+    )
+
+
+def _build_gitlab_provider(settings: Settings, client: httpware.Client) -> GitLabProvider:
     if settings.project_id is None:
         msg = "Project id missing. Set CI_PROJECT_ID or pass --project-id."
         raise ConfigError(msg)
-    project_id: typing.Final = settings.project_id
-    client: typing.Final = httpx2.Client(
-        transport=transport,
-        base_url=settings.gitlab.endpoint,
-        timeout=settings.request_timeout,
-    )
-    http: typing.Final = HttpClient(
-        client=client,
-        auth_headers=lambda: gitlab_auth_headers(settings.gitlab.token),
-        status_translator=lambda status: _translate_status(status, project_id),
-    )
     return GitLabProvider(
         config=settings.gitlab,
-        project_id=project_id,
-        http=http,
+        project_id=settings.project_id,
+        http=client,
     )
 
 
@@ -52,22 +52,19 @@ def _build_current_strategy(settings: Settings) -> BumpStrategy:
 
 
 def _close_provider_client(provider: GitLabProvider) -> None:
-    provider.http.client.close()
+    provider.http.close()
 
 
 class SettingsGroup(modern_di.Group):
     settings = providers.ContextProvider(scope=Scope.APP, context_type=Settings)
 
 
-class TransportsGroup(modern_di.Group):
-    transport = providers.Factory(scope=Scope.APP, creator=RetryingTransport)
-
-
 class ProvidersGroup(modern_di.Group):
+    gitlab_client = providers.Factory(scope=Scope.APP, creator=_build_gitlab_client)
     gitlab_provider = providers.Factory(
         scope=Scope.APP,
         creator=_build_gitlab_provider,
-        kwargs={"transport": TransportsGroup.transport},
+        kwargs={"client": gitlab_client},
         cache_settings=providers.CacheSettings(finalizer=_close_provider_client),
     )
 
@@ -91,7 +88,6 @@ class UseCasesGroup(modern_di.Group):
 
 ALL_GROUPS: typing.Final[list[type[modern_di.Group]]] = [
     SettingsGroup,
-    TransportsGroup,
     ProvidersGroup,
     StrategiesGroup,
     UseCasesGroup,

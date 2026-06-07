@@ -1,29 +1,23 @@
 import collections.abc
 import typing
 
+import httpware
 import httpx2
 import pydantic
 import pytest
 
 from semvertag._settings import GitLabConfig
-from semvertag.providers._http import HttpClient
-from semvertag.providers.gitlab import GitLabProvider, _translate_status, gitlab_auth_headers
+from semvertag.providers.gitlab import GitLabProvider
 
 
 GITLAB_PROJECT_ID: typing.Final = 999
 GITLAB_ENDPOINT: typing.Final = "https://gitlab.example.test"
 GITLAB_TOKEN: typing.Final = "glpat-XXXXXXXXXXXXXXXXXXXX"
 _REQUEST_TIMEOUT: typing.Final = 8.0
+_TOKEN_HEADER: typing.Final = "PRIVATE-TOKEN"
 
 
 HandlerCallable: typing.TypeAlias = collections.abc.Callable[[httpx2.Request], httpx2.Response]
-
-
-def _make_status_translator(project_id: int) -> typing.Callable[[int], None]:
-    def translator(status: int) -> None:
-        _translate_status(status, project_id)
-
-    return translator
 
 
 def default_handler(request: httpx2.Request) -> httpx2.Response:
@@ -67,21 +61,22 @@ def gitlab_transport() -> httpx2.MockTransport:
 
 @pytest.fixture
 def gitlab_client(gitlab_transport: httpx2.MockTransport) -> collections.abc.Iterator[httpx2.Client]:
-    with httpx2.Client(transport=gitlab_transport, base_url=GITLAB_ENDPOINT, timeout=_REQUEST_TIMEOUT) as client:
+    config: typing.Final = GitLabConfig(endpoint=GITLAB_ENDPOINT, token=pydantic.SecretStr(GITLAB_TOKEN))
+    with httpx2.Client(
+        transport=gitlab_transport,
+        base_url=GITLAB_ENDPOINT,
+        timeout=_REQUEST_TIMEOUT,
+        headers={_TOKEN_HEADER: config.token.get_secret_value()},
+    ) as client:
         yield client
 
 
 @pytest.fixture
-def gitlab_http(gitlab_client: httpx2.Client) -> HttpClient:
-    config: typing.Final = GitLabConfig(endpoint=GITLAB_ENDPOINT, token=pydantic.SecretStr(GITLAB_TOKEN))
-    return HttpClient(
-        client=gitlab_client,
-        auth_headers=lambda: gitlab_auth_headers(config.token),
-        status_translator=_make_status_translator(GITLAB_PROJECT_ID),
-    )
+def gitlab_http(gitlab_client: httpx2.Client) -> httpware.Client:
+    return httpware.Client(httpx2_client=gitlab_client)
 
 
 @pytest.fixture
-def gitlab_provider(gitlab_http: HttpClient) -> GitLabProvider:
+def gitlab_provider(gitlab_http: httpware.Client) -> GitLabProvider:
     config: typing.Final = GitLabConfig(endpoint=GITLAB_ENDPOINT, token=pydantic.SecretStr(GITLAB_TOKEN))
     return GitLabProvider(config=config, project_id=GITLAB_PROJECT_ID, http=gitlab_http)

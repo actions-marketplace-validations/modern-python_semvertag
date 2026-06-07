@@ -2,12 +2,11 @@
 name = "semvertag"
 description = "Auto-tag GitLab repos with semantic version tags — one tool, two strategies."
 authors = [{ name = "Artur Shiriev", email = "me@shiriev.ru" }]
-requires-python = ">=3.10,<4"
+requires-python = ">=3.11,<4"
 license = "MIT"
 readme = "README.md"
 keywords = ["semver", "gitlab", "ci", "auto-tag", "conventional-commits"]
 classifiers = [
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -23,6 +22,7 @@ dependencies = [
     "pydantic-settings",
     "modern-di-typer",
     "httpx2",
+    "httpware[pydantic]",
 ]
 
 [project.scripts]
