@@ -1,5 +1,6 @@
 import typing
 
+import httpware
 import httpx2
 import modern_di
 from modern_di import Scope, providers
@@ -8,11 +9,13 @@ from semvertag._errors import ConfigError
 from semvertag._settings import Settings
 from semvertag._transport import RetryingTransport
 from semvertag._use_case import SemvertagUseCase
-from semvertag.providers._http import HttpClient
-from semvertag.providers.gitlab import GitLabProvider, _translate_status, gitlab_auth_headers
+from semvertag.providers.gitlab import GitLabProvider
 from semvertag.strategies._base import BumpStrategy
 from semvertag.strategies.branch_prefix import BranchPrefixStrategy
 from semvertag.strategies.conventional_commits import ConventionalCommitsStrategy
+
+
+_PRIVATE_TOKEN_HEADER: typing.Final = "PRIVATE-TOKEN"
 
 
 def _build_gitlab_provider(settings: Settings, transport: httpx2.BaseTransport) -> GitLabProvider:
@@ -20,16 +23,13 @@ def _build_gitlab_provider(settings: Settings, transport: httpx2.BaseTransport) 
         msg = "Project id missing. Set CI_PROJECT_ID or pass --project-id."
         raise ConfigError(msg)
     project_id: typing.Final = settings.project_id
-    client: typing.Final = httpx2.Client(
+    inner_client: typing.Final = httpx2.Client(
         transport=transport,
         base_url=settings.gitlab.endpoint,
         timeout=settings.request_timeout,
+        headers={_PRIVATE_TOKEN_HEADER: settings.gitlab.token.get_secret_value()},
     )
-    http: typing.Final = HttpClient(
-        client=client,
-        auth_headers=lambda: gitlab_auth_headers(settings.gitlab.token),
-        status_translator=lambda status: _translate_status(status, project_id),
-    )
+    http: typing.Final = httpware.Client(httpx2_client=inner_client)
     return GitLabProvider(
         config=settings.gitlab,
         project_id=project_id,
@@ -52,7 +52,7 @@ def _build_current_strategy(settings: Settings) -> BumpStrategy:
 
 
 def _close_provider_client(provider: GitLabProvider) -> None:
-    provider.http.client.close()
+    provider.http._httpx2_client.close()  # noqa: SLF001 — transitional, Task 4 replaces _close_provider_client
 
 
 class SettingsGroup(modern_di.Group):

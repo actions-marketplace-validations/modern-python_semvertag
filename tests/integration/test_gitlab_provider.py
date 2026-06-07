@@ -1,22 +1,18 @@
 import typing
 
+import httpware
 import httpx2
 import pydantic
 import pytest
 
-from semvertag import _transport
 from semvertag._errors import AuthError, ConfigError, ProviderAPIError
 from semvertag._settings import GitLabConfig
-from semvertag._transport import RetryingTransport
 from semvertag._types import Commit, Tag
 from semvertag.providers._base import Provider
-from semvertag.providers._http import HttpClient
 from semvertag.providers.gitlab import (
     GitLabProvider,
     _next_page_url,
     _parse_rel_values,
-    _translate_status,
-    gitlab_auth_headers,
 )
 from tests.conftest import (
     GITLAB_ENDPOINT,
@@ -43,33 +39,22 @@ _EXPECTED_PAGE_CALLS: typing.Final = 2
 _PAGINATION_CAP: typing.Final = 100
 
 
+_TOKEN_HEADER: typing.Final = "PRIVATE-TOKEN"
+
+
 def _make_provider(handler: HandlerCallable) -> tuple[GitLabProvider, httpx2.Client]:
     transport: typing.Final = httpx2.MockTransport(handler)
-    client: typing.Final = httpx2.Client(transport=transport, base_url=GITLAB_ENDPOINT)
     config: typing.Final = GitLabConfig(endpoint=GITLAB_ENDPOINT, token=pydantic.SecretStr(GITLAB_TOKEN))
-    http: typing.Final = HttpClient(
-        client=client,
-        auth_headers=lambda: gitlab_auth_headers(config.token),
-        status_translator=lambda status: _translate_status(status, GITLAB_PROJECT_ID),
+    inner_client: typing.Final = httpx2.Client(
+        transport=transport,
+        base_url=GITLAB_ENDPOINT,
+        headers={_TOKEN_HEADER: config.token.get_secret_value()},
     )
+    http: typing.Final = httpware.Client(httpx2_client=inner_client)
     provider: typing.Final = GitLabProvider(config=config, project_id=GITLAB_PROJECT_ID, http=http)
-    return provider, client
-
-
-def _make_provider_with_retrying_transport(
-    inner_handler: HandlerCallable,
-) -> tuple[GitLabProvider, httpx2.Client]:
-    inner: typing.Final = httpx2.MockTransport(inner_handler)
-    retrying: typing.Final = RetryingTransport(inner=inner)
-    client: typing.Final = httpx2.Client(transport=retrying, base_url=GITLAB_ENDPOINT)
-    config: typing.Final = GitLabConfig(endpoint=GITLAB_ENDPOINT, token=pydantic.SecretStr(GITLAB_TOKEN))
-    http: typing.Final = HttpClient(
-        client=client,
-        auth_headers=lambda: gitlab_auth_headers(config.token),
-        status_translator=lambda status: _translate_status(status, GITLAB_PROJECT_ID),
-    )
-    provider: typing.Final = GitLabProvider(config=config, project_id=GITLAB_PROJECT_ID, http=http)
-    return provider, client
+    # Return the inner httpx2.Client so tests can use it as a context manager
+    # for teardown; httpware.Client doesn't own its lifecycle when constructed via httpx2_client=.
+    return provider, inner_client
 
 
 # Protocol conformance
@@ -121,6 +106,15 @@ def test_raises_provider_api_error_when_default_branch_body_is_not_json() -> Non
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
     with client, pytest.raises(ProviderAPIError, match="malformed JSON"):
+        provider.get_default_branch()
+
+
+def test_raises_provider_api_error_when_default_branch_body_is_not_object() -> None:
+    overrides: typing.Final = {
+        ("GET", _PROJECT_PATH): httpx2.Response(200, json=[]),
+    }
+    provider, client = _make_provider(compose_handler(default_handler, overrides))
+    with client, pytest.raises(ProviderAPIError, match="expected object"):
         provider.get_default_branch()
 
 
@@ -515,19 +509,16 @@ def _handler_that_raises_for(
     _MAIN_VERB_CALLS,
     ids=[name for name, _call, _key in _MAIN_VERB_CALLS],
 )
-def test_raises_provider_api_error_on_5xx_after_retries_exhausted(
-    monkeypatch: pytest.MonkeyPatch,
+def test_raises_provider_api_error_on_5xx(
     verb_name: str,  # noqa: ARG001
     verb_callable: typing.Callable[[GitLabProvider], None],
     endpoint_key: tuple[str, str],
 ) -> None:
-    monkeypatch.setattr(_transport.time, "sleep", lambda _: None)
-    monkeypatch.setattr(_transport.random, "uniform", lambda _lo, _hi: 0.0)
     handler: typing.Final = _handler_that_returns_for(
         endpoint_key,
         httpx2.Response(_SERVICE_UNAVAILABLE_STATUS, json={}),
     )
-    provider, client = _make_provider_with_retrying_transport(handler)
+    provider, client = _make_provider(handler)
     with client, pytest.raises(ProviderAPIError, match=f"GitLab API failure: {_SERVICE_UNAVAILABLE_STATUS}"):
         verb_callable(provider)
 
@@ -537,19 +528,16 @@ def test_raises_provider_api_error_on_5xx_after_retries_exhausted(
     _MAIN_VERB_CALLS,
     ids=[name for name, _call, _key in _MAIN_VERB_CALLS],
 )
-def test_raises_provider_api_error_on_429_after_retries_exhausted(
-    monkeypatch: pytest.MonkeyPatch,
+def test_raises_provider_api_error_on_429(
     verb_name: str,  # noqa: ARG001
     verb_callable: typing.Callable[[GitLabProvider], None],
     endpoint_key: tuple[str, str],
 ) -> None:
-    monkeypatch.setattr(_transport.time, "sleep", lambda _: None)
-    monkeypatch.setattr(_transport.random, "uniform", lambda _lo, _hi: 0.0)
     handler: typing.Final = _handler_that_returns_for(
         endpoint_key,
         httpx2.Response(_TOO_MANY_REQUESTS_STATUS, json={}),
     )
-    provider, client = _make_provider_with_retrying_transport(handler)
+    provider, client = _make_provider(handler)
     with client, pytest.raises(ProviderAPIError, match="GitLab rate limit: 429"):
         verb_callable(provider)
 
@@ -559,33 +547,22 @@ def test_raises_provider_api_error_on_429_after_retries_exhausted(
     _MAIN_VERB_CALLS,
     ids=[name for name, _call, _key in _MAIN_VERB_CALLS],
 )
-def test_raises_provider_api_error_when_request_error_chained_from_exc(
-    monkeypatch: pytest.MonkeyPatch,
+def test_raises_provider_api_error_when_network_error(
     verb_name: str,  # noqa: ARG001
     verb_callable: typing.Callable[[GitLabProvider], None],
     endpoint_key: tuple[str, str],
 ) -> None:
-    monkeypatch.setattr(_transport.time, "sleep", lambda _: None)
-    monkeypatch.setattr(_transport.random, "uniform", lambda _lo, _hi: 0.0)
     handler: typing.Final = _handler_that_raises_for(
         endpoint_key,
         lambda: httpx2.ConnectError("simulated network failure"),
     )
-    provider, client = _make_provider_with_retrying_transport(handler)
-    with client, pytest.raises(ProviderAPIError, match="request failed") as exc_info:
+    provider, client = _make_provider(handler)
+    with client, pytest.raises(ProviderAPIError, match="GitLab unreachable") as exc_info:
         verb_callable(provider)
-    assert isinstance(exc_info.value.__cause__, httpx2.ConnectError)
+    assert isinstance(exc_info.value.__cause__, httpware.NetworkError)
 
 
-# Status translator + Link-header parser edge cases
-
-
-_TEAPOT_STATUS: typing.Final = 418
-
-
-def test_translate_status_raises_provider_api_error_for_unknown_status() -> None:
-    with pytest.raises(ProviderAPIError, match="Unexpected GitLab response: 418"):
-        _translate_status(_TEAPOT_STATUS, GITLAB_PROJECT_ID)
+# Link-header parser edge cases
 
 
 def _link_header_response(link_header: str) -> httpx2.Response:
