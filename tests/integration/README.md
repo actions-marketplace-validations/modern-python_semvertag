@@ -1,17 +1,22 @@
 # Integration test notes
 
-## `_transport.time.sleep` monkeypatch coupling
+## Mocking the HTTP transport
 
-Integration tests that exercise retry-exhaustion paths (`test_gitlab_provider.py:848-849, 862-863, 876-877`; exit-4 cases in `test_cli_quiet_json_matrix.py`) reach into `semvertag._transport` and replace its bound `time.sleep` and `random.uniform` references with no-ops:
+Integration tests inject `httpx2.MockTransport` into the production `httpware.Client` so the GitLab provider can be exercised end-to-end without a real GitLab.
+
+Two seams exist, depending on the test entry point:
+
+- **CLI-level tests** (`test_cli_*.py`) drive `semvertag.__main__` through Typer's `CliRunner` and let the DI container build the production stack. They override `ioc.ProvidersGroup.gitlab_client` with a mock-backed `httpware.Client` via the `install_mock_transport` fixture in `conftest.py`.
+- **Provider-level tests** (`test_gitlab_provider.py`) bypass the container and call the `_make_provider(handler)` helper, which constructs an `httpware.Client(httpx2_client=httpx2.Client(transport=httpx2.MockTransport(handler), base_url=...))` directly.
+
+## Disabling retry sleeps
+
+Retry-exhaustion paths (`test_raises_provider_api_error_on_5xx`, `..._on_429`, the exit-4 cases in `test_cli_quiet_json_matrix.py`) would otherwise wait on `httpware.Retry`'s full-jitter backoff. The standard fix is to monkeypatch the stdlib sleep used by `httpware.middleware.resilience.retry`:
 
 ```python
-monkeypatch.setattr(_transport.time, "sleep", lambda *_: None)
-monkeypatch.setattr(_transport.random, "uniform", lambda *_: 0.0)
+monkeypatch.setattr(time, "sleep", lambda *_a, **_k: None)
 ```
 
-This is the established no-sleep pattern. **Two consequences worth knowing before refactoring `_transport.py`:**
+Patching the global `time.sleep` is equivalent to patching `httpware.middleware.resilience.retry.time.sleep` because that module imports `time` and references `time.sleep` via the module attribute. If a future `httpware` refactor changes the binding shape (e.g. `from time import sleep`), this monkeypatch will silently break — tests will pass but take seconds longer.
 
-- A rename or restructure that moves the `time` / `random` module bindings (e.g., importing `from time import sleep` instead of `import time`) silently breaks the monkeypatch and reintroduces real sleeps. Tests will pass but take seconds longer.
-- If you ever add an injected `sleep_fn` / `random_fn` parameter to `RetryingTransport`, update the integration tests to inject via that seam instead of monkeypatching the module — that closes the coupling.
-
-There is no fix required today; this note exists so future `_transport` refactors don't accidentally regress test runtime or behavior.
+If `httpware.Retry` ever grows an injectable `_sleep` parameter, prefer that over the monkeypatch — it closes the coupling.
