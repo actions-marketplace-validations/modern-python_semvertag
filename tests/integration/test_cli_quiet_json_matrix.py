@@ -1,12 +1,12 @@
 import collections.abc
 import json as json_module
+import time
 import typing
 
 import httpx2
 import pytest
 from typer.testing import CliRunner
 
-from semvertag import _transport
 from semvertag.__main__ import MAIN_APP
 from semvertag._errors import SemvertagError
 from semvertag._output import Output
@@ -168,8 +168,7 @@ def test_exits_with_four_on_provider_api_error_via_503_after_retry_exhaustion(
     cli_runner: CliRunner,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(_transport.time, "sleep", lambda *_a, **_k: None)
-    monkeypatch.setattr(_transport.random, "uniform", lambda *_a, **_k: 0.0)
+    monkeypatch.setattr(time, "sleep", lambda *_a, **_k: None)
 
     def handler(request: httpx2.Request) -> httpx2.Response:  # noqa: ARG001
         return httpx2.Response(_SERVICE_UNAVAILABLE_STATUS, json={"message": "service down"})
