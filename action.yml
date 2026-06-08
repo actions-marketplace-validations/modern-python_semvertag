@@ -1,0 +1,47 @@
+name: 'semvertag'
+description: 'Auto-tag your GitHub repository with a SemVer git tag based on commits or branch prefixes.'
+author: 'modern-python'
+
+branding:
+  icon: 'tag'
+  color: 'blue'
+
+inputs:
+  strategy:
+    description: 'Bump strategy: branch-prefix (default) or conventional-commits.'
+    required: false
+    default: 'branch-prefix'
+  token:
+    description: 'GitHub token with contents: write. Defaults to the workflow-issued github.token.'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  tag:
+    description: 'The created tag (e.g. v1.2.3), or empty string if no bump was warranted.'
+    value: ${{ steps.run.outputs.tag }}
+  bump:
+    description: 'The computed bump: none | patch | minor | major.'
+    value: ${{ steps.run.outputs.bump }}
+  status:
+    description: 'The run status: created | no-bump | error.'
+    value: ${{ steps.run.outputs.status }}
+
+runs:
+  using: 'composite'
+  steps:
+    - uses: astral-sh/setup-uv@v3
+
+    - name: Run semvertag
+      id: run
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.token }}
+        SEMVERTAG_STRATEGY: ${{ inputs.strategy }}
+      run: |
+        set -euo pipefail
+        result=$(uvx 'semvertag>=0.3.1,<1' tag --json)
+        printf '%s\n' "$result"
+        printf 'tag=%s\n'    "$(jq -r '.tag // ""' <<<"$result")" >> "$GITHUB_OUTPUT"
+        printf 'bump=%s\n'   "$(jq -r '.bump'      <<<"$result")" >> "$GITHUB_OUTPUT"
+        printf 'status=%s\n' "$(jq -r '.status'    <<<"$result")" >> "$GITHUB_OUTPUT"
