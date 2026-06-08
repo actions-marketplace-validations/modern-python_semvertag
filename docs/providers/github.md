@@ -44,7 +44,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install --quiet --no-cache-dir 'uv>=0.4,<1'
-      - run: uvx 'semvertag>=0.2,<1' tag
+      - run: uvx 'semvertag>=0.3,<1' tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
@@ -75,7 +75,7 @@ Pass `--strategy` (or set `SEMVERTAG_STRATEGY`) to one of:
 | `conventional-commits` | Bump from Conventional Commits headers since the last tag. |
 
 ```yaml
-      - run: uvx 'semvertag>=0.2,<1' tag --strategy conventional-commits
+      - run: uvx 'semvertag>=0.3,<1' tag --strategy conventional-commits
 ```
 
 ## Required permissions

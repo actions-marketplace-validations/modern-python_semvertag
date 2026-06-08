@@ -63,7 +63,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install --quiet 'uv>=0.4,<1'
-      - run: uvx 'semvertag>=0.2,<1' tag
+      - run: uvx 'semvertag>=0.3,<1' tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
