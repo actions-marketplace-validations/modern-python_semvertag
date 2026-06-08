@@ -96,7 +96,7 @@ def test_raises_provider_api_error_when_default_branch_response_malformed() -> N
         ("GET", _PROJECT_PATH): httpx2.Response(200, json={"unexpected": "shape"}),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="response shape"):
+    with client, pytest.raises(ProviderAPIError, match="_ProjectResponse response could not be decoded"):
         provider.get_default_branch()
 
 
@@ -105,7 +105,7 @@ def test_raises_provider_api_error_when_default_branch_body_is_not_json() -> Non
         ("GET", _PROJECT_PATH): httpx2.Response(200, text="not json at all"),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="malformed JSON"):
+    with client, pytest.raises(ProviderAPIError, match="_ProjectResponse response could not be decoded"):
         provider.get_default_branch()
 
 
@@ -114,7 +114,7 @@ def test_raises_provider_api_error_when_default_branch_body_is_not_object() -> N
         ("GET", _PROJECT_PATH): httpx2.Response(200, json=[]),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="expected object"):
+    with client, pytest.raises(ProviderAPIError, match="_ProjectResponse response could not be decoded"):
         provider.get_default_branch()
 
 
@@ -158,7 +158,7 @@ def test_get_latest_commit_raises_provider_api_error_when_body_not_json() -> Non
         ("GET", _COMMITS_PATH): httpx2.Response(200, text="not json"),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="malformed JSON"):
+    with client, pytest.raises(ProviderAPIError, match="_CommitList response could not be decoded"):
         provider.get_latest_commit_on_default_branch()
 
 
@@ -167,7 +167,7 @@ def test_get_latest_commit_raises_provider_api_error_when_body_not_list() -> Non
         ("GET", _COMMITS_PATH): httpx2.Response(200, json={"id": "x", "message": "y"}),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="expected list"):
+    with client, pytest.raises(ProviderAPIError, match="_CommitList response could not be decoded"):
         provider.get_latest_commit_on_default_branch()
 
 
@@ -176,7 +176,7 @@ def test_get_latest_commit_raises_provider_api_error_when_commit_object_missing_
         ("GET", _COMMITS_PATH): httpx2.Response(200, json=[{"short_id": "x"}]),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="response shape"):
+    with client, pytest.raises(ProviderAPIError, match="_CommitList response could not be decoded"):
         provider.get_latest_commit_on_default_branch()
 
 
@@ -268,7 +268,7 @@ def test_list_tags_raises_provider_api_error_when_body_not_json() -> None:
         ("GET", _TAGS_PATH): httpx2.Response(200, text="not json"),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="malformed JSON"):
+    with client, pytest.raises(ProviderAPIError, match="_TagList response could not be decoded"):
         provider.list_tags()
 
 
@@ -277,7 +277,7 @@ def test_list_tags_raises_provider_api_error_when_body_not_list() -> None:
         ("GET", _TAGS_PATH): httpx2.Response(200, json={"unexpected": "shape"}),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="expected list"):
+    with client, pytest.raises(ProviderAPIError, match="_TagList response could not be decoded"):
         provider.list_tags()
 
 
@@ -286,7 +286,7 @@ def test_list_tags_raises_provider_api_error_when_tag_object_missing_keys() -> N
         ("GET", _TAGS_PATH): httpx2.Response(200, json=[{"name": "v1"}]),
     }
     provider, client = _make_provider(compose_handler(default_handler, overrides))
-    with client, pytest.raises(ProviderAPIError, match="shape invalid"):
+    with client, pytest.raises(ProviderAPIError, match="_TagList response could not be decoded"):
         provider.list_tags()
 
 

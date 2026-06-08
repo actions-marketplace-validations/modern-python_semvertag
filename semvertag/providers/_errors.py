@@ -37,6 +37,8 @@ def _translate_gitlab_status(exc: httpware.StatusError, *, project_id: int) -> E
 
 
 def _translate_gitlab_transport(exc: httpware.ClientError) -> Exception:
+    if isinstance(exc, httpware.DecodeError):
+        return ProviderAPIError(f"GitLab {exc.model.__name__} response could not be decoded: {exc.original}")
     if isinstance(exc, httpware.TimeoutError):
         return ProviderAPIError("GitLab request timed out. Try again or increase SEMVERTAG_REQUEST_TIMEOUT.")
     if isinstance(exc, httpware.RetryBudgetExhaustedError):

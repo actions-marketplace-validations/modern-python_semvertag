@@ -22,7 +22,7 @@ dependencies = [
     "pydantic-settings",
     "modern-di-typer",
     "httpx2",
-    "httpware[pydantic]",
+    "httpware[pydantic]>=0.8.2",
 ]
 
 [project.scripts]
