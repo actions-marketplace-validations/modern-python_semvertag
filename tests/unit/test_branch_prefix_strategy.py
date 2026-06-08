@@ -90,7 +90,7 @@ def test_honors_custom_minor_prefix_when_config_overrides_default() -> None:
         config=BranchPrefixConfig(
             minor=("feat/",),
             patch=("fix/",),
-            merge_mark_text="Auto-merge:",
+            merge_mark_texts=("Auto-merge:",),
         ),
     )
     assert custom.decide(_commit("Auto-merge: feat/new-thing")) is Bump.MINOR
@@ -99,10 +99,25 @@ def test_honors_custom_minor_prefix_when_config_overrides_default() -> None:
     assert custom.decide(_commit("Merge branch 'feat/x' into main")) is Bump.NONE
 
 
+def test_recognizes_github_pr_merge_subject_under_defaults() -> None:
+    default: typing.Final = BranchPrefixStrategy(config=BranchPrefixConfig())
+    assert default.decide(_commit("Merge pull request #42 from org/feature/new-thing")) is Bump.MINOR
+    assert default.decide(_commit("Merge pull request #43 from org/bugfix/bug-123")) is Bump.PATCH
+    assert default.decide(_commit("Merge pull request #44 from org/hotfix/urgent")) is Bump.PATCH
+    assert default.decide(_commit("Merge pull request #45 from org/chore/cleanup")) is Bump.NONE
+
+
+def test_recognizes_gitlab_merge_branch_subject_under_defaults() -> None:
+    default: typing.Final = BranchPrefixStrategy(config=BranchPrefixConfig())
+    assert default.decide(_commit("Merge branch 'feature/new-thing' into main")) is Bump.MINOR
+    assert default.decide(_commit("Merge branch 'bugfix/bug-123' into main")) is Bump.PATCH
+
+
 _INVALID_CONFIG_CASES: typing.Final = [
     {"minor": ()},
     {"patch": ()},
-    {"merge_mark_text": ""},
+    {"merge_mark_texts": ()},
+    {"merge_mark_texts": ("",)},
     {"minor": ("",)},
     {"patch": ("",)},
     {"minor": ("feature/", "")},

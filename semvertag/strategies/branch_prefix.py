@@ -15,7 +15,10 @@ class BranchPrefixConfig(pydantic.BaseModel):
 
     minor: tuple[_NonEmptyStr, ...] = pydantic.Field(default=("feature/",), min_length=1)
     patch: tuple[_NonEmptyStr, ...] = pydantic.Field(default=("bugfix/", "hotfix/"), min_length=1)
-    merge_mark_text: _NonEmptyStr = "Merge branch"
+    merge_mark_texts: tuple[_NonEmptyStr, ...] = pydantic.Field(
+        default=("Merge branch", "Merge pull request"),
+        min_length=1,
+    )
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
@@ -27,7 +30,7 @@ class BranchPrefixStrategy:
 
     def decide(self, commit: Commit) -> Bump:
         subject: typing.Final = subject_line(commit.message)
-        if self.config.merge_mark_text not in subject:
+        if not any(mark in subject for mark in self.config.merge_mark_texts):
             return Bump.NONE
         if any(prefix in subject for prefix in self.config.minor):
             return Bump.MINOR

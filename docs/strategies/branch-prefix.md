@@ -25,15 +25,16 @@ to a new major version manually, or switch to
 
 The strategy only fires on commits whose subject contains the literal
 string `Merge branch` (the default `git merge` subject). Commits
-without that text return `none` regardless of prefix. This means:
+without one of those marks return `none` regardless of prefix. This
+means:
 
 - Standard `git merge feature/foo` → subject `Merge branch 'feature/foo' into main` → bump = minor ✓
-- GitHub's "Merge pull request #N from user/feature/foo" → does NOT
-  contain `Merge branch` → bump = none under defaults.
+- GitHub's `Merge pull request #N from user/feature/foo` → bump = minor ✓
 - Direct pushes to the default branch → bump = none.
 
-The `merge_mark_text` is configurable (defaults to `Merge branch`);
-adapt it for non-default merge-commit conventions.
+The `merge_mark_texts` tuple is configurable (defaults to
+`("Merge branch", "Merge pull request")`); adapt it for non-default
+merge-commit conventions (e.g. squash-merge prefixes).
 
 ## Customizing the prefixes
 
@@ -43,8 +44,8 @@ The strategy reads its prefixes from the application's settings layer:
   `("feature/",)`).
 - `patch` — tuple of prefixes that trigger a patch bump (default
   `("bugfix/", "hotfix/")`).
-- `merge_mark_text` — substring that marks a subject as a merge
-  commit (default `Merge branch`).
+- `merge_mark_texts` — tuple of substrings that mark a subject as a
+  merge commit (default `("Merge branch", "Merge pull request")`).
 
 These are set via the same pydantic-settings env-var mechanism used
 for tokens / endpoints — see the provider docs for the variable
