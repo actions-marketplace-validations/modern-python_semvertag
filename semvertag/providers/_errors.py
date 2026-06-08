@@ -36,16 +36,16 @@ def _translate_gitlab_status(exc: httpware.StatusError, *, project_id: int) -> E
     return ProviderAPIError(f"Unexpected GitLab response: {exc.response.status_code}. Please file an issue.")
 
 
-def _translate_gitlab_transport(exc: httpware.ClientError) -> Exception:
+def _translate_transport(exc: httpware.ClientError, *, provider_label: str) -> Exception:
     if isinstance(exc, httpware.DecodeError):
-        return ProviderAPIError(f"GitLab {exc.model.__name__} response could not be decoded: {exc.original}")
+        return ProviderAPIError(f"{provider_label} {exc.model.__name__} response could not be decoded: {exc.original}")
     if isinstance(exc, httpware.TimeoutError):
-        return ProviderAPIError("GitLab request timed out. Try again or increase SEMVERTAG_REQUEST_TIMEOUT.")
+        return ProviderAPIError(f"{provider_label} request timed out. Try again or increase SEMVERTAG_REQUEST_TIMEOUT.")
     if isinstance(exc, httpware.RetryBudgetExhaustedError):
-        return ProviderAPIError(f"GitLab retries exhausted after {exc.attempts} attempts. Try again later.")
+        return ProviderAPIError(f"{provider_label} retries exhausted after {exc.attempts} attempts. Try again later.")
     if isinstance(exc, httpware.NetworkError):
-        return ProviderAPIError("GitLab unreachable. Check network connectivity.")
-    return ProviderAPIError(f"GitLab request failed: {type(exc).__name__}")
+        return ProviderAPIError(f"{provider_label} unreachable. Check network connectivity.")
+    return ProviderAPIError(f"{provider_label} request failed: {type(exc).__name__}")
 
 
 def translate_gitlab(exc: httpware.ClientError, *, project_id: int) -> Exception:
@@ -57,7 +57,7 @@ def translate_gitlab(exc: httpware.ClientError, *, project_id: int) -> Exception
     """
     if isinstance(exc, httpware.StatusError):
         return _translate_gitlab_status(exc, project_id=project_id)
-    return _translate_gitlab_transport(exc)
+    return _translate_transport(exc, provider_label="GitLab")
 
 
 def translate_create_tag_bad_request(exc: httpware.BadRequestError, *, tag_name: str) -> Exception:
