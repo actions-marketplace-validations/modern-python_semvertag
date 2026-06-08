@@ -1,0 +1,35 @@
+name: tag-major
+
+# Maintains the floating `v0` major tag so users can pin `uses:
+# modern-python/semvertag@v0` and ride minor bumps. Skipped on
+# prereleases so an `v0.5.0-rc1` does not drag `v0` ahead of the latest
+# stable. When v1.0.0 ships, this same job creates `v1` automatically
+# from the tag name's leading segment.
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  update-major-tag:
+    if: ${{ !github.event.release.prerelease }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Update major tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          # RELEASE_TAG = 'v0.4.0' → major = 'v0'
+          major="${RELEASE_TAG%%.*}"
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -fa "$major" "$RELEASE_TAG" -m "Update $major to $RELEASE_TAG"
+          git push -f origin "$major"
