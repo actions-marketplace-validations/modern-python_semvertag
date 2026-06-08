@@ -4,7 +4,6 @@ import httpware
 import modern_di
 from modern_di import Scope, providers
 
-from semvertag._errors import ConfigError
 from semvertag._settings import Settings
 from semvertag._use_case import SemvertagUseCase
 from semvertag.providers.gitlab import GitLabProvider
@@ -27,12 +26,9 @@ def _build_gitlab_client(settings: Settings) -> httpware.Client:
 
 
 def _build_gitlab_provider(settings: Settings, client: httpware.Client) -> GitLabProvider:
-    if settings.project_id is None:
-        msg = "Project id missing. Set CI_PROJECT_ID or pass --project-id."
-        raise ConfigError(msg)
     return GitLabProvider(
         config=settings.gitlab,
-        project_id=settings.project_id,
+        project_id=settings.project_id,  # ty: ignore
         http=client,
     )
 

@@ -1,4 +1,5 @@
 import logging
+import os
 import typing
 
 import pydantic
@@ -43,6 +44,7 @@ class GitHubConfig(pydantic_settings.BaseSettings):
         populate_by_name=True,
     )
 
+    endpoint: str = "https://api.github.com"
     token: pydantic.SecretStr = pydantic.Field(
         default=pydantic.SecretStr(""),
         validation_alias=pydantic.AliasChoices(
@@ -53,20 +55,43 @@ class GitHubConfig(pydantic_settings.BaseSettings):
     )
 
 
+def _detect_provider_from_env() -> typing.Literal["gitlab", "github"]:
+    github_ci = os.environ.get("GITHUB_ACTIONS", "").lower() == "true"
+    gitlab_ci = os.environ.get("GITLAB_CI", "").lower() == "true"
+    if github_ci and gitlab_ci:
+        msg = (
+            "ambiguous CI context: both GITHUB_ACTIONS and GITLAB_CI are set. "
+            "Pass --provider github|gitlab or set SEMVERTAG_PROVIDER to disambiguate."
+        )
+        raise ValueError(msg)
+    if github_ci:
+        return "github"
+    return "gitlab"
+
+
 class Settings(pydantic_settings.BaseSettings):
     model_config = pydantic_settings.SettingsConfigDict(
         env_prefix=_ENV_PREFIX,
         env_nested_delimiter=_ENV_NESTED_DELIMITER,
         case_sensitive=False,
         extra="ignore",
+        populate_by_name=True,
     )
 
     strategy: typing.Literal["branch-prefix", "conventional-commits"] = "branch-prefix"
+    provider: typing.Literal["gitlab", "github"] | None = pydantic.Field(
+        default=None,
+        validation_alias=pydantic.AliasChoices("SEMVERTAG_PROVIDER", "PROVIDER"),
+    )
     default_branch: str | None = None
     request_timeout: float = pydantic.Field(default=8.0, gt=0)
     project_id: int | None = pydantic.Field(
         default=None,
         validation_alias=pydantic.AliasChoices("SEMVERTAG_PROJECT_ID", "CI_PROJECT_ID"),
+    )
+    repo: str | None = pydantic.Field(
+        default=None,
+        validation_alias=pydantic.AliasChoices("SEMVERTAG_REPO", "GITHUB_REPOSITORY"),
     )
     gitlab: GitLabConfig = pydantic.Field(default_factory=GitLabConfig)
     github: GitHubConfig = pydantic.Field(default_factory=GitHubConfig)
@@ -85,6 +110,18 @@ class Settings(pydantic_settings.BaseSettings):
             )
             return _REQUEST_TIMEOUT_CEILING
         return value
+
+    @pydantic.model_validator(mode="after")
+    def _resolve_provider(self) -> "Settings":
+        if self.provider is None:
+            self.provider = _detect_provider_from_env()
+        if self.provider == "github" and not self.repo:
+            msg = "provider=github requires `repo` (set GITHUB_REPOSITORY or pass --repo OWNER/REPO)"
+            raise ValueError(msg)
+        if self.provider == "gitlab" and self.project_id is None:
+            msg = "provider=gitlab requires `project_id` (set CI_PROJECT_ID or pass --project-id N)"
+            raise ValueError(msg)
+        return self
 
 
 def apply_cli_overlay(settings: Settings, overrides: dict[str, typing.Any]) -> Settings:

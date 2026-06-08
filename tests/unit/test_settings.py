@@ -25,11 +25,11 @@ _PROJECT_ID_INT_CI: typing.Final = 777
 
 @pytest.mark.usefixtures("clean_settings_env")
 def test_uses_defaults_when_no_env_set() -> None:
-    settings: typing.Final = Settings()
+    settings: typing.Final = Settings(project_id=_PROJECT_ID_INT_SEMVERTAG)
     assert settings.strategy == "branch-prefix"
     assert settings.default_branch is None
     assert settings.request_timeout == _TIMEOUT_DEFAULT_VALUE
-    assert settings.project_id is None
+    assert settings.project_id == _PROJECT_ID_INT_SEMVERTAG
     assert settings.gitlab.endpoint == "https://gitlab.com"
     assert settings.gitlab.token.get_secret_value() == ""
     assert settings.github.token.get_secret_value() == ""
@@ -40,7 +40,7 @@ def test_resolves_token_from_ci_job_token_when_only_native_var_set(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("CI_JOB_TOKEN", _CI_JOB_TOKEN_VALUE)
-    settings: typing.Final = Settings()
+    settings: typing.Final = Settings(project_id=_PROJECT_ID_INT_SEMVERTAG)
     assert settings.gitlab.token.get_secret_value() == _CI_JOB_TOKEN_VALUE
 
 
@@ -51,7 +51,7 @@ def test_prefers_semvertag_token_over_provider_native(
     monkeypatch.setenv("SEMVERTAG_TOKEN", _FLAT_SEMVERTAG_TOKEN)
     monkeypatch.setenv("GITLAB_TOKEN", _GITLAB_TOKEN_VALUE)
     monkeypatch.setenv("CI_JOB_TOKEN", _CI_JOB_TOKEN_VALUE)
-    settings: typing.Final = Settings()
+    settings: typing.Final = Settings(project_id=_PROJECT_ID_INT_SEMVERTAG)
     assert settings.gitlab.token.get_secret_value() == _FLAT_SEMVERTAG_TOKEN
 
 
@@ -62,21 +62,21 @@ def test_prefers_nested_prefix_over_flat_semvertag_token(
     monkeypatch.setenv("SEMVERTAG_GITLAB__TOKEN", _NESTED_TOKEN)
     monkeypatch.setenv("SEMVERTAG_TOKEN", _FLAT_SEMVERTAG_TOKEN)
     monkeypatch.setenv("CI_JOB_TOKEN", _CI_JOB_TOKEN_VALUE)
-    settings: typing.Final = Settings()
+    settings: typing.Final = Settings(project_id=_PROJECT_ID_INT_SEMVERTAG)
     assert settings.gitlab.token.get_secret_value() == _NESTED_TOKEN
 
 
 @pytest.mark.usefixtures("clean_settings_env")
 def test_reads_nested_env_var_for_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SEMVERTAG_GITLAB__ENDPOINT", _CUSTOM_ENDPOINT)
-    settings: typing.Final = Settings()
+    settings: typing.Final = Settings(project_id=_PROJECT_ID_INT_SEMVERTAG)
     assert settings.gitlab.endpoint == _CUSTOM_ENDPOINT
 
 
 @pytest.mark.usefixtures("clean_settings_env")
 def test_secret_str_is_redacted_in_repr() -> None:
     gitlab: typing.Final = GitLabConfig(token=pydantic.SecretStr(_PLAINTEXT_SECRET))
-    settings: typing.Final = Settings(gitlab=gitlab)
+    settings: typing.Final = Settings(gitlab=gitlab, project_id=_PROJECT_ID_INT_SEMVERTAG)
     assert _PLAINTEXT_SECRET not in repr(settings)
     assert _PLAINTEXT_SECRET not in repr(settings.gitlab)
     assert _PLAINTEXT_SECRET not in repr(settings.gitlab.token)
@@ -87,7 +87,7 @@ def test_secret_str_is_redacted_in_repr() -> None:
 @pytest.mark.usefixtures("clean_settings_env")
 def test_request_timeout_clamps_to_ten(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SEMVERTAG_REQUEST_TIMEOUT", _TIMEOUT_OVER_CEILING)
-    settings: typing.Final = Settings()
+    settings: typing.Final = Settings(project_id=_PROJECT_ID_INT_SEMVERTAG)
     assert settings.request_timeout == _TIMEOUT_CEILING_VALUE
 
 
@@ -105,7 +105,7 @@ def test_request_timeout_passes_through_when_below_ten(
     expected: float,
 ) -> None:
     monkeypatch.setenv("SEMVERTAG_REQUEST_TIMEOUT", raw)
-    settings: typing.Final = Settings()
+    settings: typing.Final = Settings(project_id=_PROJECT_ID_INT_SEMVERTAG)
     assert settings.request_timeout == expected
 
 
@@ -148,6 +148,79 @@ def test_prefers_semvertag_project_id_over_ci_project_id(
 
 @pytest.mark.usefixtures("clean_settings_env")
 def test_apply_cli_overlay_rejects_keys_deeper_than_two_levels() -> None:
-    base: typing.Final = Settings()
+    base: typing.Final = Settings(project_id=_PROJECT_ID_INT_SEMVERTAG)
     with pytest.raises(ValueError, match="exceeds nesting depth 2"):
         apply_cli_overlay(base, {"gitlab.foo.bar": "x"})
+
+
+def test_provider_defaults_to_gitlab_when_no_ci_env_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("GITLAB_CI", raising=False)
+    monkeypatch.delenv("SEMVERTAG_PROVIDER", raising=False)
+    monkeypatch.delenv("PROVIDER", raising=False)
+    settings = Settings(project_id=_PROJECT_ID_INT_SEMVERTAG)
+    assert settings.provider == "gitlab"
+
+
+def test_provider_detects_github_from_github_actions_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.delenv("GITLAB_CI", raising=False)
+    monkeypatch.delenv("SEMVERTAG_PROVIDER", raising=False)
+    settings = Settings(repo="owner/repo")
+    assert settings.provider == "github"
+
+
+def test_provider_detects_gitlab_from_gitlab_ci_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.setenv("GITLAB_CI", "true")
+    monkeypatch.delenv("SEMVERTAG_PROVIDER", raising=False)
+    settings = Settings(project_id=_PROJECT_ID_INT_SEMVERTAG)
+    assert settings.provider == "gitlab"
+
+
+def test_provider_raises_when_both_ci_envs_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITLAB_CI", "true")
+    monkeypatch.delenv("SEMVERTAG_PROVIDER", raising=False)
+    with pytest.raises(Exception, match="ambiguous"):
+        Settings(project_id=_PROJECT_ID_INT_SEMVERTAG, repo="owner/repo")
+
+
+def test_explicit_provider_overrides_auto_detection(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITLAB_CI", "true")
+    settings = Settings(provider="gitlab", project_id=_PROJECT_ID_INT_SEMVERTAG)
+    assert settings.provider == "gitlab"
+
+
+def test_provider_github_requires_repo(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("GITLAB_CI", raising=False)
+    with pytest.raises(Exception, match=r"provider=github requires .*repo"):
+        Settings(provider="github")
+
+
+def test_provider_gitlab_requires_project_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("GITLAB_CI", raising=False)
+    with pytest.raises(Exception, match=r"provider=gitlab requires .*project_id"):
+        Settings(provider="gitlab")
+
+
+def test_github_config_endpoint_defaults_to_api_github_com() -> None:
+    settings = Settings(provider="github", repo="owner/repo")
+    assert settings.github.endpoint == "https://api.github.com"
+
+
+def test_github_config_endpoint_overridable_for_enterprise(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SEMVERTAG_GITHUB__ENDPOINT", "https://github.acme.com/api/v3")
+    settings = Settings(provider="github", repo="owner/repo")
+    assert settings.github.endpoint == "https://github.acme.com/api/v3"
+
+
+def test_repo_alias_picks_up_github_repository_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_REPOSITORY", "octocat/Hello-World")
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    settings = Settings()
+    assert settings.repo == "octocat/Hello-World"
+    assert settings.provider == "github"

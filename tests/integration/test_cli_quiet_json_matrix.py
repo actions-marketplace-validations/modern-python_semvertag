@@ -205,4 +205,4 @@ def test_exits_with_two_when_project_id_missing(
     result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag"])
 
     assert result.exit_code == _EXIT_CONFIG_ERROR
-    assert "Project id missing" in result.stderr
+    assert "project_id" in result.stderr

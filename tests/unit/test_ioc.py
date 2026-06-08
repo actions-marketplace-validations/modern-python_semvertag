@@ -1,5 +1,7 @@
 import typing
 
+import httpware
+
 from semvertag import ioc
 from semvertag._settings import Settings
 from semvertag.strategies.branch_prefix import BranchPrefixStrategy
@@ -42,3 +44,11 @@ def test_named_strategy_factories_resolve_to_their_concrete_types_regardless_of_
         cc = ioc.container.resolve_provider(ioc.StrategiesGroup.conventional_commits_strategy)
         assert isinstance(bp, BranchPrefixStrategy)
         assert isinstance(cc, ConventionalCommitsStrategy)
+
+
+def test_container_builds_gitlab_client_with_settings_values() -> None:
+    settings: typing.Final = _settings()
+    with ioc.container:
+        ioc.container.set_context(Settings, settings)
+        client = ioc.container.resolve_provider(ioc.ProvidersGroup.gitlab_client)
+        assert isinstance(client, httpware.Client)
