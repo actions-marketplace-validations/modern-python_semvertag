@@ -79,7 +79,7 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - uses: astral-sh/setup-uv@v8
+    - uses: astral-sh/setup-uv@v7
 
     - name: Run semvertag
       id: run
@@ -103,7 +103,7 @@ runs:
 - **Echo the JSON before parsing.** Humans reading the job log see the full envelope; no second CLI invocation is needed for diagnostics.
 - **`jq -r '.tag // ""'`.** Guards the `no-bump` case (where `tag` is JSON `null`) so the output becomes an empty string — predictable for downstream `if:` gates. `.bump` and `.status` are always present per `RunResult` schema_version 1.0; no fallback.
 - **CLI version floor `>=0.3.1,<1`.** Locks to the minimum CLI version that ships every feature the action depends on (`--json` envelope, `GITHUB_ACTIONS=true` auto-detection, branch-prefix GitHub merge subject recognition). The floor only needs to bump when a future release breaks CLI contract — not on every minor. Upper bound `<1` defers the 1.0 question. This also resolves a chicken-and-egg: the floor is satisfiable from PyPI today, so the PR landing this work passes its own `action-smoke` CI on the first run.
-- **`astral-sh/setup-uv@v8`.** The official Astral installer; one step, prebuilt binary, automatic cache. Used by every modern uv-in-CI project. Trade-off accepted: this adds a third-party action dependency we trust via major-version pin (v8.x.y).
+- **`astral-sh/setup-uv@v7`.** The official Astral installer; one step, prebuilt binary, automatic cache. Used by every modern uv-in-CI project. `v7` is the highest major astral publishes as a floating tag — specific `v8.x.y` releases exist (v8.0.0–v8.2.0) but no floating `v8` ref has been tagged upstream, so `@v8` resolves to nothing. Trade-off accepted: this adds a third-party action dependency we trust via major-version pin (v7.x.y).
 - **`SEMVERTAG_STRATEGY` always exported.** Mirrors the GitLab Catalog template (`templates/semvertag.yml`). Trade-off: a workflow-level `env: SEMVERTAG_STRATEGY: ...` is overridden by the action's step-env. The fix in that rare case is to use the `with: strategy:` input, which is the documented path.
 - **Internal step id `run`.** Lets the top-level `outputs:` mapping reference `steps.run.outputs.*`. Users wire their own `id:` on the calling `uses:` block to read the exposed outputs.
 - **No checkout inside the action.** Established tag/release actions (mathieudutour/github-tag-action, googleapis/release-please-action, cycjimmy/semantic-release-action) uniformly skip it. Callers have heterogeneous checkout needs (refs, submodules, LFS, sparse, monorepo paths, custom tokens); a composite that silently re-checks out fights those needs.
@@ -212,9 +212,9 @@ action-smoke:
 
 | Check | Layer |
 |---|---|
-| YAML parses, inputs/outputs declared correctly | `astral-sh/setup-uv@v8` + GHA composite loader (failure shows up as a runtime parse error) |
-| `astral-sh/setup-uv@v8` resolves and installs | Step 1 of the composite |
-| `uvx 'semvertag>=0.4,<1' tag --json` runs to completion | Step 2 (failure → `set -euo pipefail` exits non-zero) |
+| YAML parses, inputs/outputs declared correctly | `astral-sh/setup-uv@v7` + GHA composite loader (failure shows up as a runtime parse error) |
+| `astral-sh/setup-uv@v7` resolves and installs | Step 1 of the composite |
+| `uvx 'semvertag>=0.3.1,<1' tag --json` runs to completion | Step 2 (failure → `set -euo pipefail` exits non-zero) |
 | JSON parsing emits non-empty `status`/`bump` | The verify step |
 
 ### What it does NOT cover
@@ -348,7 +348,7 @@ Structure:
 | Decision | Choice | Why not the alternative |
 |---|---|---|
 | Checkout in the action? | No | Every published tag/release action skips it; callers have heterogeneous checkout needs (refs, submodules, LFS, sparse, monorepo paths). |
-| uv installer? | `astral-sh/setup-uv@v8` | Faster than `pip install uv` (prebuilt binary, automatic cache). The third-party-action dependency is the ecosystem norm. |
+| uv installer? | `astral-sh/setup-uv@v7` | Faster than `pip install uv` (prebuilt binary, automatic cache). The third-party-action dependency is the ecosystem norm. `v7` is the highest major astral publishes as a floating tag today; `@v8` resolves to nothing. |
 | Inputs? | `strategy` + `token` only | Every other knob (GHE endpoint, repo override, branch-prefix lists) already works via `env:`. Duplicating the env-var contract as inputs creates drift risk. |
 | Outputs? | `tag`, `bump`, `status` | CLI already emits `--json`; cost is ~10 YAML lines. Matches release-please / github-tag-action convention. `commit` and `reason` deferred; can be added non-breaking. |
 | Always export `SEMVERTAG_STRATEGY`? | Yes | Matches the GitLab Catalog template. Trade-off: workflow-level env `SEMVERTAG_STRATEGY` is overridden — use the `with: strategy:` input instead. |
@@ -357,7 +357,7 @@ Structure:
 
 ## Risks
 
-- **`astral-sh/setup-uv@v8` major bump.** A future v9 may introduce breaking changes to inputs we depend on. Mitigation: pin to `@v8` (major) and revisit on each minor semvertag release.
+- **`astral-sh/setup-uv@v7` major bump.** When astral publishes a floating `v8` (or later) tag, that becomes a candidate upgrade. Re-evaluate the pin on each minor semvertag release; bump only if the new major brings features we want and has stable floating-tag support.
 - **`name: 'semvertag'` Marketplace collision.** If the name is taken when we publish, the listing fails to create. Mitigation: pre-flight check in the runbook. If the name is taken, change `name:` in `action.yml` to `'semvertag tag'` (Marketplace permits spaces in display names) before re-attempting publication; the listing slug and the `uses: modern-python/semvertag@v0` syntax are unaffected. Low likelihood — "semvertag" is distinctive.
 - **`jq` not on self-hosted runners.** Default on every GitHub-hosted runner; self-hosted runners may strip it. Mitigation: document the assumption in `docs/providers/github.md` as a known requirement.
 - **`SEMVERTAG_STRATEGY` step-env override surprise.** Users setting it at workflow level may be confused when the action's input default `branch-prefix` wins. Mitigation: documented in the new "Strategy-specific env vars" docs section; the `with: strategy:` input is presented as the canonical knob.

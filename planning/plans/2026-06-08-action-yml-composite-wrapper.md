@@ -6,7 +6,7 @@
 
 **Architecture:** Pure-YAML + Markdown work. Two new workflow files (`action.yml`, `.github/workflows/tag-major.yml`), one modified workflow (`.github/workflows/semvertag.yml` dogfood), one modified workflow (`.github/workflows/ci.yml` adds an `action-smoke` job that runs `uses: ./` against the action being introduced — the chicken-and-egg is resolved by floor `'semvertag>=0.3.1,<1'` which is satisfiable from PyPI today). Docs rewrite touches README and `docs/providers/github.md`. Runbook captures the manual Marketplace publication procedure as five numbered steps for the maintainer to follow.
 
-**Tech Stack:** GitHub Actions composite action syntax, `astral-sh/setup-uv@v8`, bash + `jq` (default on `ubuntu-latest`), MkDocs (`mkdocs build --strict` as the docs gate).
+**Tech Stack:** GitHub Actions composite action syntax, `astral-sh/setup-uv@v7`, bash + `jq` (default on `ubuntu-latest`), MkDocs (`mkdocs build --strict` as the docs gate).
 
 **Spec:** `planning/specs/2026-06-08-action-yml-composite-wrapper-design.md`
 
@@ -81,7 +81,7 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - uses: astral-sh/setup-uv@v8
+    - uses: astral-sh/setup-uv@v7
 
     - name: Run semvertag
       id: run
@@ -634,7 +634,7 @@ If you're already using the documented pure-CLI snippet and don't want to consum
 
 ## What landed
 
-- `action.yml` at repo root — composite action: `astral-sh/setup-uv@v8`, then `uvx 'semvertag>=0.3.1,<1' tag --json`, then parses the envelope into `tag` / `bump` / `status` step outputs.
+- `action.yml` at repo root — composite action: `astral-sh/setup-uv@v7`, then `uvx 'semvertag>=0.3.1,<1' tag --json`, then parses the envelope into `tag` / `bump` / `status` step outputs.
 - `.github/workflows/tag-major.yml` — fires on release published (non-prerelease) and force-updates the floating `v0` major tag so consumers can pin `@v0` and ride minor bumps automatically.
 - Dogfood workflow migration — `.github/workflows/semvertag.yml` now consumes `uses: ./`, exercising the action against the working tree on every push to main.
 - `action-smoke` CI job — runs `uses: ./` on every PR and asserts that `status` and `bump` outputs are non-empty. Real tag creation against the GitHub API is covered by the post-merge dogfood run, not the PR-time job (forks can't have `contents: write`).
@@ -783,7 +783,7 @@ Wait for CI to complete on the PR. Expected:
 - `pytest` job (matrix of 4 Python versions): green (same as before this PR).
 - `action-smoke` job: green. The new job will:
   - Check out the repo with `fetch-depth: 0`.
-  - Run `uses: ./` which executes the action.yml: install uv via `setup-uv@v8`, then `uvx 'semvertag>=0.3.1,<1' tag --json`.
+  - Run `uses: ./` which executes the action.yml: install uv via `setup-uv@v7`, then `uvx 'semvertag>=0.3.1,<1' tag --json`.
   - The CLI emits a JSON envelope. On a PR commit (not a merge commit), branch-prefix returns `status=no-bump` because no merge subject matches. `tag` is empty; `bump` is `none`; `status` is `no-bump`.
   - The verify step asserts that `status` and `bump` outputs are non-empty. Both are (`"no-bump"` and `"none"`), so the assertion passes.
 
