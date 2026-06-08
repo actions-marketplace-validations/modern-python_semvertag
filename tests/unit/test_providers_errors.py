@@ -134,3 +134,16 @@ def test_translate_create_tag_bad_request_other_400_becomes_generic_config_error
     assert isinstance(result, ConfigError)
     assert "v1.2.3" not in str(result)
     assert "400" in str(result)
+
+
+def test_translate_gitlab_decode_error_becomes_provider_api_error() -> None:
+    underlying = ValueError("input should be a valid dictionary")
+    exc = httpware.DecodeError(
+        response=_response(200, body=b"null"),
+        model=type("FakeModel", (), {}),
+        original=underlying,
+    )
+    result = translate_gitlab(exc, project_id=_PROJECT_ID)
+    assert isinstance(result, ProviderAPIError)
+    assert "FakeModel" in str(result)
+    assert "valid dictionary" in str(result).lower()
