@@ -94,9 +94,9 @@ When you give the step an `id:`, downstream steps can read three outputs:
 
 | Output | Value |
 |---|---|
-| `tag` | The created tag (e.g. `v1.2.3`), or empty string on `no-bump`. |
+| `tag` | The created tag (e.g. `v1.2.3`), or empty string when `status` is `no-bump`. |
 | `bump` | `none` \| `patch` \| `minor` \| `major`. |
-| `status` | `created` \| `no-bump` \| `error`. |
+| `status` | `created` (tag pushed) \| `no-bump` (nothing to tag — no prior tag, already tagged, no merge commit, or non-conforming commit). On CLI error the action itself exits non-zero and this output is not written. |
 
 Example: trigger a downstream release-notes job only when a tag was
 created.

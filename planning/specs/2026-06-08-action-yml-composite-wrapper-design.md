@@ -73,7 +73,7 @@ outputs:
     description: 'The computed bump: none | patch | minor | major.'
     value: ${{ steps.run.outputs.bump }}
   status:
-    description: 'The run status: created | no-bump | error.'
+    description: 'The run status: created (tag pushed) | no-bump (nothing to tag).'
     value: ${{ steps.run.outputs.status }}
 
 runs:
@@ -91,9 +91,17 @@ runs:
         set -euo pipefail
         result=$(uvx 'semvertag>=0.3.1,<1' tag --json)
         printf '%s\n' "$result"
+        # Normalize the CLI's internal status (`no_tags`, `already_tagged`,
+        # `no_merge_commit`, `no_conforming_commit`, ...) to a stable
+        # consumer-facing enum. `set -euo pipefail` ensures we never reach
+        # here on CLI errors, so there is no `error` value to surface.
+        case "$(jq -r '.status' <<<"$result")" in
+          created) status='created' ;;
+          *)       status='no-bump' ;;
+        esac
         printf 'tag=%s\n'    "$(jq -r '.tag // ""' <<<"$result")" >> "$GITHUB_OUTPUT"
         printf 'bump=%s\n'   "$(jq -r '.bump'      <<<"$result")" >> "$GITHUB_OUTPUT"
-        printf 'status=%s\n' "$(jq -r '.status'    <<<"$result")" >> "$GITHUB_OUTPUT"
+        printf 'status=%s\n' "$status"                            >> "$GITHUB_OUTPUT"
 ```
 
 ### Key choices
@@ -101,7 +109,7 @@ runs:
 - **No `SEMVERTAG_PROVIDER` forced.** Auto-detection from `GITHUB_ACTIONS=true` (shipped in 0.3.0) makes that unnecessary. Forcing it would suppress useful errors when someone runs `act` or otherwise exercises the action outside a real GHA environment.
 - **`set -euo pipefail`.** If `uvx` fails, the step fails fast and jq never sees empty/garbage stdin. Avoids ambiguous half-states in `$GITHUB_OUTPUT`.
 - **Echo the JSON before parsing.** Humans reading the job log see the full envelope; no second CLI invocation is needed for diagnostics.
-- **`jq -r '.tag // ""'`.** Guards the `no-bump` case (where `tag` is JSON `null`) so the output becomes an empty string — predictable for downstream `if:` gates. `.bump` and `.status` are always present per `RunResult` schema_version 1.0; no fallback.
+- **`jq -r '.tag // ""'`.** Guards the no-bump case (where `tag` is JSON `null`) so the output becomes an empty string — predictable for downstream `if:` gates. `.bump` is always present per `RunResult` schema_version 1.0; no fallback. `.status` is normalized via a bash `case` to a stable consumer-facing enum (`created | no-bump`), encapsulating the CLI's internal status strings (`no_tags`, `already_tagged`, `no_merge_commit`, `no_conforming_commit`, ...) so future CLI additions don't break action consumers.
 - **CLI version floor `>=0.3.1,<1`.** Locks to the minimum CLI version that ships every feature the action depends on (`--json` envelope, `GITHUB_ACTIONS=true` auto-detection, branch-prefix GitHub merge subject recognition). The floor only needs to bump when a future release breaks CLI contract — not on every minor. Upper bound `<1` defers the 1.0 question. This also resolves a chicken-and-egg: the floor is satisfiable from PyPI today, so the PR landing this work passes its own `action-smoke` CI on the first run.
 - **`astral-sh/setup-uv@v7`.** The official Astral installer; one step, prebuilt binary, automatic cache. Used by every modern uv-in-CI project. `v7` is the highest major astral publishes as a floating tag — specific `v8.x.y` releases exist (v8.0.0–v8.2.0) but no floating `v8` ref has been tagged upstream, so `@v8` resolves to nothing. Trade-off accepted: this adds a third-party action dependency we trust via major-version pin (v7.x.y).
 - **`SEMVERTAG_STRATEGY` always exported.** Mirrors the GitLab Catalog template (`templates/semvertag.yml`). Trade-off: a workflow-level `env: SEMVERTAG_STRATEGY: ...` is overridden by the action's step-env. The fix in that rare case is to use the `with: strategy:` input, which is the documented path.

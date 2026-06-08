@@ -75,7 +75,7 @@ outputs:
     description: 'The computed bump: none | patch | minor | major.'
     value: ${{ steps.run.outputs.bump }}
   status:
-    description: 'The run status: created | no-bump | error.'
+    description: 'The run status: created (tag pushed) | no-bump (nothing to tag).'
     value: ${{ steps.run.outputs.status }}
 
 runs:
@@ -93,9 +93,17 @@ runs:
         set -euo pipefail
         result=$(uvx 'semvertag>=0.3.1,<1' tag --json)
         printf '%s\n' "$result"
+        # Normalize the CLI's internal status (`no_tags`, `already_tagged`,
+        # `no_merge_commit`, `no_conforming_commit`, ...) to a stable
+        # consumer-facing enum. `set -euo pipefail` ensures we never reach
+        # here on CLI errors, so there is no `error` value to surface.
+        case "$(jq -r '.status' <<<"$result")" in
+          created) status='created' ;;
+          *)       status='no-bump' ;;
+        esac
         printf 'tag=%s\n'    "$(jq -r '.tag // ""' <<<"$result")" >> "$GITHUB_OUTPUT"
         printf 'bump=%s\n'   "$(jq -r '.bump'      <<<"$result")" >> "$GITHUB_OUTPUT"
-        printf 'status=%s\n' "$(jq -r '.status'    <<<"$result")" >> "$GITHUB_OUTPUT"
+        printf 'status=%s\n' "$status"                            >> "$GITHUB_OUTPUT"
 ```
 
 - [ ] **Step 2: Verify YAML parses**
@@ -495,9 +503,9 @@ When you give the step an `id:`, downstream steps can read three outputs:
 
 | Output | Value |
 |---|---|
-| `tag` | The created tag (e.g. `v1.2.3`), or empty string on `no-bump`. |
+| `tag` | The created tag (e.g. `v1.2.3`), or empty string when `status` is `no-bump`. |
 | `bump` | `none` \| `patch` \| `minor` \| `major`. |
-| `status` | `created` \| `no-bump` \| `error`. |
+| `status` | `created` (tag pushed) \| `no-bump` (nothing to tag — no prior tag, already tagged, no merge commit, or non-conforming commit). On CLI error the action itself exits non-zero and this output is not written. |
 
 Example: trigger a downstream release-notes job only when a tag was
 created.
