@@ -13,6 +13,10 @@ from semvertag.providers.gitlab import GitLabProvider
 GITLAB_PROJECT_ID: typing.Final = 999
 GITLAB_ENDPOINT: typing.Final = "https://gitlab.example.test"
 GITLAB_TOKEN: typing.Final = "glpat-XXXXXXXXXXXXXXXXXXXX"
+
+GITHUB_ENDPOINT: typing.Final = "https://api.github.test"
+GITHUB_TOKEN: typing.Final = "ghp_XXXXXXXXXXXXXXXXXXXX"
+GITHUB_REPO: typing.Final = "owner/repo"
 _REQUEST_TIMEOUT: typing.Final = 8.0
 _TOKEN_HEADER: typing.Final = "PRIVATE-TOKEN"
 
