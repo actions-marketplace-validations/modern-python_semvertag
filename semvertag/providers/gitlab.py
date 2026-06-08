@@ -36,6 +36,14 @@ class _TagItem(pydantic.BaseModel):
     commit: _TagCommit
 
 
+class _CommitList(pydantic.RootModel[list[_CommitItem]]):
+    pass
+
+
+class _TagList(pydantic.RootModel[list[_TagItem]]):
+    pass
+
+
 # RFC 8288 Link header: <uri-reference>;param=value;param="value";...
 _LINK_ENTRY_RE: typing.Final = re.compile(
     r"<\s*(?P<url>[^>]*?)\s*>(?P<params>(?:\s*;\s*[^,;]+)*)",
@@ -51,15 +59,12 @@ class GitLabProvider:
 
     def get_default_branch(self) -> str:
         try:
-            response = self.http.send(
-                self.http.build_request(
-                    "GET",
-                    f"{_API_PREFIX}/{self.project_id}",
-                )
+            project = self.http.get(
+                f"{_API_PREFIX}/{self.project_id}",
+                response_model=_ProjectResponse,
             )
         except httpware.ClientError as exc:
             raise _errors.translate_gitlab(exc, project_id=self.project_id) from exc
-        project = _validate_project_response(response)
         if not project.default_branch:
             msg = "Default branch missing from GitLab response. Verify the project has a default branch configured."
             raise ConfigError(msg)
@@ -68,20 +73,17 @@ class GitLabProvider:
     def get_latest_commit_on_default_branch(self) -> Commit:
         default_branch: typing.Final = self.get_default_branch()
         try:
-            response = self.http.send(
-                self.http.build_request(
-                    "GET",
-                    f"{_API_PREFIX}/{self.project_id}/repository/commits",
-                    params={"ref_name": default_branch, "per_page": 1},
-                )
+            commits = self.http.get(
+                f"{_API_PREFIX}/{self.project_id}/repository/commits",
+                params={"ref_name": default_branch, "per_page": 1},
+                response_model=_CommitList,
             )
         except httpware.ClientError as exc:
             raise _errors.translate_gitlab(exc, project_id=self.project_id) from exc
-        items = _validate_commit_list(response)
-        if not items:
+        if not commits.root:
             msg = f"No commits on default branch '{default_branch}'. The branch appears empty."
             raise ProviderAPIError(msg)
-        head = items[0]
+        head = commits.root[0]
         return Commit(sha=head.id, message=head.message)
 
     def list_tags(self) -> list[Tag]:
@@ -90,11 +92,13 @@ class GitLabProvider:
         params: dict[str, typing.Any] | None = {"per_page": _TAGS_PER_PAGE, "page": 1}
         for _ in range(_MAX_TAG_PAGES):
             try:
-                response = self.http.send(self.http.build_request("GET", url, params=params))
+                response, page = self.http.send_with_response(
+                    self.http.build_request("GET", url, params=params),
+                    response_model=_TagList,
+                )
             except httpware.ClientError as exc:
                 raise _errors.translate_gitlab(exc, project_id=self.project_id) from exc
-            items = _validate_tag_list(response)
-            tags.extend(Tag(name=item.name, commit_sha=item.commit.id) for item in items)
+            tags.extend(Tag(name=item.name, commit_sha=item.commit.id) for item in page.root)
             next_url = _next_page_url(response, current_url=str(response.request.url))
             if next_url is None:
                 return tags
@@ -137,53 +141,6 @@ def _next_page_url(response: httpx2.Response, current_url: str) -> str | None:
         if "next" in _parse_rel_values(match.group("params")):
             return urllib.parse.urljoin(current_url, url_part)
     return None
-
-
-_TModel = typing.TypeVar("_TModel", bound=pydantic.BaseModel)
-
-
-def _validate_obj(response: httpx2.Response, model: type[_TModel], *, label: str) -> _TModel:
-    try:
-        payload = response.json()
-    except (ValueError, httpx2.DecodingError) as exc:
-        msg = f"GitLab {label} response malformed JSON."
-        raise ProviderAPIError(msg) from exc
-    if not isinstance(payload, dict):
-        msg = f"GitLab {label} response shape invalid: expected object."
-        raise ProviderAPIError(msg)
-    try:
-        return model.model_validate(payload)
-    except pydantic.ValidationError as exc:
-        msg = f"GitLab {label} response shape invalid: {exc}"
-        raise ProviderAPIError(msg) from exc
-
-
-def _validate_project_response(response: httpx2.Response) -> _ProjectResponse:
-    return _validate_obj(response, _ProjectResponse, label="project")
-
-
-def _validate_tag_list(response: httpx2.Response) -> list[_TagItem]:
-    return _validate_list(response, _TagItem, label="tags")
-
-
-def _validate_commit_list(response: httpx2.Response) -> list[_CommitItem]:
-    return _validate_list(response, _CommitItem, label="commits")
-
-
-def _validate_list(response: httpx2.Response, model: type[_TModel], *, label: str) -> list[_TModel]:
-    try:
-        payload = response.json()
-    except (ValueError, httpx2.DecodingError) as exc:
-        msg = f"GitLab {label} response malformed JSON."
-        raise ProviderAPIError(msg) from exc
-    if not isinstance(payload, list):
-        msg = f"GitLab {label} response shape invalid: expected list."
-        raise ProviderAPIError(msg)
-    try:
-        return [model.model_validate(item) for item in payload]
-    except pydantic.ValidationError as exc:
-        msg = f"GitLab {label} response shape invalid: {exc}"
-        raise ProviderAPIError(msg) from exc
 
 
 def _parse_rel_values(params_blob: str) -> set[str]:
