@@ -1,0 +1,37 @@
+name: semvertag
+
+# Dogfood semvertag against this repo. Auto-tags on push to main when the latest
+# commit is a merge from `feat/...` (minor bump) or `bugfix/`/`hotfix/...` (patch).
+# This repo's branch convention is `feat/...`, so SEMVERTAG_BRANCH_PREFIX__MINOR
+# overrides the default `feature/` mapping.
+#
+# The workflow only creates a tag — it does NOT trigger publish.yml (which fires
+# on GitHub release creation). To publish to PyPI, create a GitHub release pointed
+# at the auto-tagged commit.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: semvertag
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install --quiet --no-cache-dir 'uv>=0.4,<1'
+      - run: uvx 'semvertag>=0.3,<1' tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SEMVERTAG_BRANCH_PREFIX__MINOR: '["feat/"]'
