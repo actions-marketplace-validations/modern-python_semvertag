@@ -42,30 +42,27 @@ def _build_github_client(settings: Settings) -> httpware.Client:
     )
 
 
-def _build_gitlab_provider(settings: Settings, client: httpware.Client) -> GitLabProvider:
-    return GitLabProvider(
-        config=settings.gitlab,
-        project_id=settings.project_id,  # ty: ignore
-        http=client,
-    )
-
-
-def _build_github_provider(settings: Settings, client: httpware.Client) -> GitHubProvider:
-    return GitHubProvider(
-        config=settings.github,
-        repo=settings.repo,  # ty: ignore
-        http=client,
-    )
-
-
 def _build_current_provider(
     settings: Settings,
-    gitlab_provider: GitLabProvider,
-    github_provider: GitHubProvider,
+    gitlab_client: httpware.Client,
+    github_client: httpware.Client,
 ) -> Provider:
+    """
+    Construct the active provider.
+
+    Both clients are eagerly resolved (modern-di Factory eagerly resolves all
+    provider_kwargs in resolve()). That's acceptable — httpx2 connection pools
+    are lazy, so the unused client doesn't open sockets.
+
+    Only the active branch constructs a Provider instance; the assert serves
+    both as type-narrowing for `ty` and as a clear failure mode if the
+    Settings._resolve_provider validator's invariant ever breaks.
+    """
     if settings.provider == "github":
-        return github_provider
-    return gitlab_provider
+        assert settings.repo is not None, "provider=github invariant: validator guarantees repo is set"  # noqa: S101
+        return GitHubProvider(config=settings.github, repo=settings.repo, http=github_client)
+    assert settings.project_id is not None, "provider=gitlab invariant: validator guarantees project_id is set"  # noqa: S101
+    return GitLabProvider(config=settings.gitlab, project_id=settings.project_id, http=gitlab_client)
 
 
 def _build_branch_prefix_strategy(settings: Settings) -> BranchPrefixStrategy:
@@ -82,12 +79,8 @@ def _build_current_strategy(settings: Settings) -> BumpStrategy:
     return _build_branch_prefix_strategy(settings)
 
 
-def _close_gitlab_provider(provider: GitLabProvider) -> None:
-    provider.http.close()
-
-
-def _close_github_provider(provider: GitHubProvider) -> None:
-    provider.http.close()
+def _close_client(client: httpware.Client) -> None:
+    client.close()
 
 
 class SettingsGroup(modern_di.Group):
@@ -95,24 +88,22 @@ class SettingsGroup(modern_di.Group):
 
 
 class ProvidersGroup(modern_di.Group):
-    gitlab_client = providers.Factory(scope=Scope.APP, creator=_build_gitlab_client, bound_type=None)
-    gitlab_provider = providers.Factory(
+    gitlab_client = providers.Factory(
         scope=Scope.APP,
-        creator=_build_gitlab_provider,
-        kwargs={"client": gitlab_client},
-        cache_settings=providers.CacheSettings(finalizer=_close_gitlab_provider),
+        creator=_build_gitlab_client,
+        bound_type=None,
+        cache_settings=providers.CacheSettings(finalizer=_close_client),
     )
-    github_client = providers.Factory(scope=Scope.APP, creator=_build_github_client, bound_type=None)
-    github_provider = providers.Factory(
+    github_client = providers.Factory(
         scope=Scope.APP,
-        creator=_build_github_provider,
-        kwargs={"client": github_client},
-        cache_settings=providers.CacheSettings(finalizer=_close_github_provider),
+        creator=_build_github_client,
+        bound_type=None,
+        cache_settings=providers.CacheSettings(finalizer=_close_client),
     )
     current_provider = providers.Factory(
         scope=Scope.APP,
         creator=_build_current_provider,
-        kwargs={"gitlab_provider": gitlab_provider, "github_provider": github_provider},
+        kwargs={"gitlab_client": gitlab_client, "github_client": github_client},
     )
 
 
