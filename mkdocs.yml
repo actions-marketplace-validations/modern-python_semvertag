@@ -6,6 +6,7 @@ nav:
   - Quick Start: index.md
   - Providers:
     - GitLab CI: providers/gitlab.md
+    - GitHub Actions: providers/github.md
   - Strategies:
     - Branch prefix: strategies/branch-prefix.md
     - Conventional commits: strategies/conventional-commits.md

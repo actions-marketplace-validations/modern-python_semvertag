@@ -153,6 +153,13 @@ def test_apply_cli_overlay_rejects_keys_deeper_than_two_levels() -> None:
         apply_cli_overlay(base, {"gitlab.foo.bar": "x"})
 
 
+@pytest.mark.usefixtures("clean_settings_env")
+def test_apply_cli_overlay_updates_top_level_key() -> None:
+    base: typing.Final = Settings(project_id=_PROJECT_ID_INT_SEMVERTAG)
+    result = apply_cli_overlay(base, {"default_branch": "develop"})
+    assert result.default_branch == "develop"
+
+
 def test_provider_defaults_to_gitlab_when_no_ci_env_present(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     monkeypatch.delenv("GITLAB_CI", raising=False)

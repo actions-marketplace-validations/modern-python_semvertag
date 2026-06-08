@@ -4,6 +4,8 @@ import httpware
 
 from semvertag import ioc
 from semvertag._settings import Settings
+from semvertag.providers.github import GitHubProvider
+from semvertag.providers.gitlab import GitLabProvider
 from semvertag.strategies.branch_prefix import BranchPrefixStrategy
 from semvertag.strategies.conventional_commits import ConventionalCommitsStrategy
 
@@ -52,3 +54,21 @@ def test_container_builds_gitlab_client_with_settings_values() -> None:
         ioc.container.set_context(Settings, settings)
         client = ioc.container.resolve_provider(ioc.ProvidersGroup.gitlab_client)
         assert isinstance(client, httpware.Client)
+
+
+def test_container_resolves_github_provider_when_settings_provider_is_github() -> None:
+    settings = Settings(provider="github", repo="owner/repo")
+    with ioc.container:
+        ioc.container.set_context(Settings, settings)
+        provider = ioc.container.resolve_provider(ioc.ProvidersGroup.current_provider)
+        assert isinstance(provider, GitHubProvider)
+        assert provider.name == "github"
+
+
+def test_container_resolves_gitlab_provider_when_settings_provider_is_gitlab() -> None:
+    settings = Settings(provider="gitlab", project_id=999)
+    with ioc.container:
+        ioc.container.set_context(Settings, settings)
+        provider = ioc.container.resolve_provider(ioc.ProvidersGroup.current_provider)
+        assert isinstance(provider, GitLabProvider)
+        assert provider.name == "gitlab"
