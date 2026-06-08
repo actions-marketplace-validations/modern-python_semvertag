@@ -1,12 +1,10 @@
 import dataclasses
-import re
 import typing
-import urllib.parse
 
 import httpware
-import httpx2
 import pydantic
 
+from semvertag import _link_pagination
 from semvertag._errors import ConfigError, ProviderAPIError
 from semvertag._settings import GitLabConfig
 from semvertag._types import Commit, Tag
@@ -42,12 +40,6 @@ class _CommitList(pydantic.RootModel[list[_CommitItem]]):
 
 class _TagList(pydantic.RootModel[list[_TagItem]]):
     pass
-
-
-# RFC 8288 Link header: <uri-reference>;param=value;param="value";...
-_LINK_ENTRY_RE: typing.Final = re.compile(
-    r"<\s*(?P<url>[^>]*?)\s*>(?P<params>(?:\s*;\s*[^,;]+)*)",
-)
 
 
 @dataclasses.dataclass(frozen=True, slots=True, kw_only=True)
@@ -99,10 +91,10 @@ class GitLabProvider:
             except httpware.ClientError as exc:
                 raise _errors.translate_gitlab(exc, project_id=self.project_id) from exc
             tags.extend(Tag(name=item.name, commit_sha=item.commit.id) for item in page.root)
-            next_url = _next_page_url(response, current_url=str(response.request.url))
+            next_url = _link_pagination.next_page_url(response, current_url=str(response.request.url))
             if next_url is None:
                 return tags
-            if not _same_origin(next_url, self.config.endpoint):
+            if not _link_pagination.same_origin(next_url, self.config.endpoint):
                 msg = (
                     "GitLab pagination Link header points to a different host than SEMVERTAG_GITLAB__ENDPOINT. "
                     "Refusing to follow to protect credentials."
@@ -128,35 +120,3 @@ class GitLabProvider:
             raise _errors.translate_create_tag_bad_request(exc, tag_name=name) from exc
         except httpware.ClientError as exc:
             raise _errors.translate_gitlab(exc, project_id=self.project_id) from exc
-
-
-def _next_page_url(response: httpx2.Response, current_url: str) -> str | None:
-    link_header: typing.Final = response.headers.get("link")
-    if not link_header:
-        return None
-    for match in _LINK_ENTRY_RE.finditer(link_header):
-        url_part = match.group("url").strip()
-        if not url_part:
-            continue
-        if "next" in _parse_rel_values(match.group("params")):
-            return urllib.parse.urljoin(current_url, url_part)
-    return None
-
-
-def _parse_rel_values(params_blob: str) -> set[str]:
-    for raw_param in params_blob.split(";"):
-        param = raw_param.strip()
-        if not param:
-            continue
-        name, _, value = param.partition("=")
-        if name.strip().lower() != "rel":
-            continue
-        cleaned = value.strip().strip('"').strip("'").lower()
-        return set(cleaned.split())
-    return set()
-
-
-def _same_origin(url: str, endpoint: str) -> bool:
-    parsed: typing.Final = urllib.parse.urlsplit(url)
-    expected: typing.Final = urllib.parse.urlsplit(endpoint)
-    return parsed.scheme == expected.scheme and parsed.netloc == expected.netloc
