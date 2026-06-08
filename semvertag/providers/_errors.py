@@ -68,3 +68,56 @@ def translate_create_tag_bad_request(exc: httpware.BadRequestError, *, tag_name:
             f"Tag already exists: '{tag_name}'. The tag was created by a concurrent run or previous invocation."
         )
     return ConfigError("Request rejected by GitLab: 400. Check tag name format and that the referenced commit exists.")
+
+
+def _translate_github_auth(exc: httpware.StatusError) -> Exception:
+    if isinstance(exc, httpware.UnauthorizedError):
+        return AuthError("Token rejected: 401. Verify SEMVERTAG_TOKEN is valid.")
+    return AuthError(
+        "Token missing scope or insufficient permission: 403. "
+        "Verify SEMVERTAG_TOKEN has 'contents: write' scope "
+        "(or 'public_repo' / 'repo' for classic PATs)."
+    )
+
+
+def _translate_github_status(exc: httpware.StatusError, *, repo: str) -> Exception:
+    if isinstance(exc, (httpware.UnauthorizedError, httpware.ForbiddenError)):
+        return _translate_github_auth(exc)
+    if isinstance(exc, httpware.NotFoundError):
+        return ConfigError(f"GitHub repo not found: repo='{repo}'. Verify GITHUB_REPOSITORY or --repo OWNER/REPO.")
+    if isinstance(exc, httpware.UnprocessableEntityError):
+        return ConfigError("Request rejected by GitHub: 422. Check ref format and that the referenced sha exists.")
+    if isinstance(exc, httpware.RateLimitedError):
+        return ProviderAPIError(
+            "GitHub rate limit: 429. Retries exhausted after 3 attempts; "
+            "try again later or check token rate-limit budget."
+        )
+    if isinstance(exc, httpware.ServerStatusError):
+        return ProviderAPIError(
+            f"GitHub API failure: {exc.response.status_code}. "
+            "Retries exhausted after 3 attempts. Try again or check https://www.githubstatus.com."
+        )
+    return ProviderAPIError(f"Unexpected GitHub response: {exc.response.status_code}. Please file an issue.")
+
+
+def translate_github(exc: httpware.ClientError, *, repo: str) -> Exception:
+    """
+    Translate an httpware ClientError into the semvertag domain error for GitHub.
+
+    Mirrors translate_gitlab's dispatch order; status branches carry GitHub-specific
+    actionable hints. Transport branches (DecodeError, TimeoutError, RetryBudget,
+    NetworkError, fallback) delegate to the shared _translate_transport.
+    """
+    if isinstance(exc, httpware.StatusError):
+        return _translate_github_status(exc, repo=repo)
+    return _translate_transport(exc, provider_label="GitHub")
+
+
+def translate_create_tag_github_unprocessable(exc: httpware.UnprocessableEntityError, *, tag_name: str) -> Exception:
+    """create_tag's 422 has an 'already_exists' special case; everything else is a generic 422."""
+    body = exc.response.text
+    if "already_exists" in body or "already exists" in body.lower():
+        return ConfigError(
+            f"Tag already exists: '{tag_name}'. The tag was created by a concurrent run or previous invocation."
+        )
+    return ConfigError("Request rejected by GitHub: 422. Check ref format and that the referenced sha exists.")

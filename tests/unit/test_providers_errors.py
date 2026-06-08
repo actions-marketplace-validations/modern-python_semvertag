@@ -4,7 +4,12 @@ import httpware
 import httpx2
 
 from semvertag._errors import AuthError, ConfigError, ProviderAPIError
-from semvertag.providers._errors import translate_create_tag_bad_request, translate_gitlab
+from semvertag.providers._errors import (
+    translate_create_tag_bad_request,
+    translate_create_tag_github_unprocessable,
+    translate_github,
+    translate_gitlab,
+)
 
 
 _PROJECT_ID = 4242
@@ -147,3 +152,136 @@ def test_translate_gitlab_decode_error_becomes_provider_api_error() -> None:
     assert isinstance(result, ProviderAPIError)
     assert "FakeModel" in str(result)
     assert "valid dictionary" in str(result).lower()
+
+
+_REPO = "octocat/Hello-World"
+
+
+# translate_github — status errors
+
+
+def test_translate_github_401_becomes_auth_error_with_token_guidance() -> None:
+    result = translate_github(_status_error(httpware.UnauthorizedError, 401), repo=_REPO)
+    assert isinstance(result, AuthError)
+    assert "Token rejected" in str(result)
+    assert "SEMVERTAG_TOKEN" in str(result)
+
+
+def test_translate_github_403_becomes_auth_error_with_scope_guidance() -> None:
+    result = translate_github(_status_error(httpware.ForbiddenError, 403), repo=_REPO)
+    assert isinstance(result, AuthError)
+    assert "403" in str(result)
+    assert "contents: write" in str(result) or "public_repo" in str(result) or "repo" in str(result)
+
+
+def test_translate_github_404_becomes_config_error_with_repo() -> None:
+    result = translate_github(_status_error(httpware.NotFoundError, 404), repo=_REPO)
+    assert isinstance(result, ConfigError)
+    assert f"repo='{_REPO}'" in str(result)
+
+
+def test_translate_github_422_becomes_config_error() -> None:
+    result = translate_github(_status_error(httpware.UnprocessableEntityError, 422), repo=_REPO)
+    assert isinstance(result, ConfigError)
+    assert "422" in str(result)
+
+
+def test_translate_github_429_becomes_provider_api_error() -> None:
+    result = translate_github(_status_error(httpware.RateLimitedError, 429), repo=_REPO)
+    assert isinstance(result, ProviderAPIError)
+    assert "rate limit" in str(result).lower()
+
+
+def test_translate_github_500_becomes_provider_api_error_with_status_page() -> None:
+    result = translate_github(_status_error(httpware.InternalServerError, 500), repo=_REPO)
+    assert isinstance(result, ProviderAPIError)
+    assert "500" in str(result)
+    assert "githubstatus.com" in str(result)
+
+
+def test_translate_github_503_becomes_provider_api_error() -> None:
+    result = translate_github(_status_error(httpware.ServiceUnavailableError, 503), repo=_REPO)
+    assert isinstance(result, ProviderAPIError)
+
+
+def test_translate_github_unknown_4xx_falls_back_to_provider_api_error() -> None:
+    result = translate_github(_status_error(httpware.ClientStatusError, 418), repo=_REPO)
+    assert isinstance(result, ProviderAPIError)
+    assert "418" in str(result)
+
+
+# translate_github — transport errors (via shared _translate_transport)
+
+
+def test_translate_github_timeout_becomes_provider_api_error() -> None:
+    exc = httpware.TimeoutError("read timed out")
+    result = translate_github(exc, repo=_REPO)
+    assert isinstance(result, ProviderAPIError)
+    assert "GitHub request timed out" in str(result)
+
+
+def test_translate_github_network_error_becomes_provider_api_error() -> None:
+    exc = httpware.NetworkError("connection refused")
+    result = translate_github(exc, repo=_REPO)
+    assert isinstance(result, ProviderAPIError)
+    assert "GitHub unreachable" in str(result)
+
+
+def test_translate_github_retry_budget_exhausted_becomes_provider_api_error() -> None:
+    exc = httpware.RetryBudgetExhaustedError(last_response=None, last_exception=None, attempts=3)
+    result = translate_github(exc, repo=_REPO)
+    assert isinstance(result, ProviderAPIError)
+    assert "GitHub retries exhausted" in str(result)
+
+
+def test_translate_github_decode_error_becomes_provider_api_error() -> None:
+    underlying = ValueError("invalid")
+    exc = httpware.DecodeError(
+        response=_response(200, body=b"null"),
+        model=type("FakeModel", (), {}),
+        original=underlying,
+    )
+    result = translate_github(exc, repo=_REPO)
+    assert isinstance(result, ProviderAPIError)
+    assert "GitHub FakeModel response could not be decoded" in str(result)
+
+
+def test_translate_github_unknown_client_error_falls_back_to_provider_api_error() -> None:
+    exc = httpware.ClientError("unknown")
+    result = translate_github(exc, repo=_REPO)
+    assert isinstance(result, ProviderAPIError)
+    assert "GitHub request failed" in str(result)
+
+
+# translate_create_tag_github_unprocessable
+
+
+def test_translate_create_tag_github_already_exists_structured_becomes_config_error() -> None:
+    raw = _status_error(
+        httpware.UnprocessableEntityError,
+        422,
+        body=b'{"message":"Reference already exists","errors":[{"resource":"Reference","code":"already_exists"}]}',
+    )
+    assert isinstance(raw, httpware.UnprocessableEntityError)
+    result = translate_create_tag_github_unprocessable(raw, tag_name="v1.2.3")
+    assert isinstance(result, ConfigError)
+    assert "v1.2.3" in str(result)
+    assert "already exists" in str(result).lower()
+
+
+def test_translate_create_tag_github_already_exists_message_only_becomes_config_error() -> None:
+    # Safety-net match on the human-readable message even if structured code is absent.
+    raw = _status_error(httpware.UnprocessableEntityError, 422, body=b'{"message":"Reference already exists"}')
+    assert isinstance(raw, httpware.UnprocessableEntityError)
+    result = translate_create_tag_github_unprocessable(raw, tag_name="v1.2.3")
+    assert isinstance(result, ConfigError)
+    assert "already exists" in str(result).lower()
+
+
+def test_translate_create_tag_github_other_422_becomes_generic_config_error() -> None:
+    raw = _status_error(httpware.UnprocessableEntityError, 422, body=b'{"message":"Invalid ref format"}')
+    assert isinstance(raw, httpware.UnprocessableEntityError)
+    result = translate_create_tag_github_unprocessable(raw, tag_name="v1.2.3")
+    assert isinstance(result, ConfigError)
+    assert "v1.2.3" not in str(result)
+    assert "422" in str(result)
