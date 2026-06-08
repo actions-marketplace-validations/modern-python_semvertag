@@ -3,8 +3,10 @@ import json as json_module
 import typing
 
 import httpx2
+import pytest
 from typer.testing import CliRunner
 
+from semvertag import ioc
 from semvertag.__main__ import MAIN_APP
 from tests.conftest import HandlerCallable
 from tests.integration.conftest import (
@@ -111,3 +113,30 @@ def test_emits_json_envelope_with_schema_version_first_when_json_flag_set(
         assert key in payload
     assert payload["tag"] == _EXPECTED_NEW_TAG
     assert payload["status"] == "created"
+
+
+def test_main_callback_accepts_github_provider_with_repo(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("GITLAB_CI", raising=False)
+    monkeypatch.setenv("SEMVERTAG_GITHUB__TOKEN", "ghp_xxx")
+    runner = CliRunner()
+    with ioc.container:
+        result = runner.invoke(
+            MAIN_APP,
+            ["--provider", "github", "--repo", "owner/repo", "tag", "--quiet"],
+        )
+    # The callback should succeed (settings.provider resolves to "github" without error).
+    # `tag` will fail because no real network; check exit code is NOT ConfigError (2).
+    # AuthError (3) or ProviderAPIError (4) both prove the provider was reached.
+    assert result.exit_code in (0, 3, 4)
+
+
+def test_main_callback_auto_detects_github_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.delenv("GITLAB_CI", raising=False)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "owner/repo")
+    monkeypatch.setenv("GITHUB_TOKEN", "ghp_xxx")
+    runner = CliRunner()
+    with ioc.container:
+        result = runner.invoke(MAIN_APP, ["tag", "--quiet"])
+    assert result.exit_code in (0, 3, 4)

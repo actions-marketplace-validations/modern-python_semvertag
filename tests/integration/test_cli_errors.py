@@ -60,11 +60,12 @@ def test_version_flag_falls_back_to_zero_when_package_metadata_missing(
 @pytest.mark.parametrize(
     ("flag", "value"),
     [
-        ("--project-id", "1234"),
+        ("--project-id", "999"),
         ("--strategy", "branch-prefix"),
         ("--token", "glpat-override"),
         ("--default-branch", "main"),
         ("--gitlab-endpoint", "https://gitlab.example.test"),
+        ("--github-endpoint", "https://api.github.example.test"),
         ("--request-timeout", "5.0"),
     ],
 )

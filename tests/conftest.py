@@ -13,11 +13,57 @@ from semvertag.providers.gitlab import GitLabProvider
 GITLAB_PROJECT_ID: typing.Final = 999
 GITLAB_ENDPOINT: typing.Final = "https://gitlab.example.test"
 GITLAB_TOKEN: typing.Final = "glpat-XXXXXXXXXXXXXXXXXXXX"
+
+GITHUB_ENDPOINT: typing.Final = "https://api.github.test"
+GITHUB_TOKEN: typing.Final = "ghp_XXXXXXXXXXXXXXXXXXXX"
+GITHUB_REPO: typing.Final = "owner/repo"
 _REQUEST_TIMEOUT: typing.Final = 8.0
 _TOKEN_HEADER: typing.Final = "PRIVATE-TOKEN"
 
 
 HandlerCallable: typing.TypeAlias = collections.abc.Callable[[httpx2.Request], httpx2.Response]
+
+
+_HOST_CI_ENV_VARS: typing.Final = (
+    # Provider auto-detection markers
+    "GITHUB_ACTIONS",
+    "GITLAB_CI",
+    "SEMVERTAG_PROVIDER",
+    "PROVIDER",
+    # Repo / project identifiers (aliased into Settings.repo / Settings.project_id)
+    "GITHUB_REPOSITORY",
+    "SEMVERTAG_REPO",
+    "CI_PROJECT_ID",
+    "SEMVERTAG_PROJECT_ID",
+    # Token aliases (aliased into Settings.github.token / Settings.gitlab.token)
+    "GITHUB_TOKEN",
+    "GITLAB_TOKEN",
+    "CI_JOB_TOKEN",
+    "SEMVERTAG_TOKEN",
+    "SEMVERTAG_GITHUB__TOKEN",
+    "SEMVERTAG_GITLAB__TOKEN",
+    # Endpoint overrides
+    "SEMVERTAG_GITHUB__ENDPOINT",
+    "SEMVERTAG_GITLAB__ENDPOINT",
+)
+
+
+@pytest.fixture(autouse=True)
+def _isolate_ci_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Strip every env var that Settings reads, so tests aren't accidentally driven by the host runner.
+
+    Without this, GitHub Actions runners (which auto-export GITHUB_ACTIONS=true,
+    GITHUB_REPOSITORY, GITHUB_TOKEN) and GitLab CI runners (GITLAB_CI=true,
+    CI_PROJECT_ID, CI_JOB_TOKEN) make Settings pick fields the test never asked for —
+    causing assertions like "Settings(provider='github') should raise because repo is missing"
+    to silently fail because GITHUB_REPOSITORY was set by the runner.
+
+    Tests that exercise env-driven behavior set the specific vars they need via their own
+    monkeypatch.setenv calls. This fixture only clears the default state.
+    """
+    for var in _HOST_CI_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
 
 
 def default_handler(request: httpx2.Request) -> httpx2.Response:

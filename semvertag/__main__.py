@@ -17,7 +17,7 @@ _PACKAGE_NAME: typing.Final = "semvertag"
 
 MAIN_APP: typing.Final = typer.Typer(
     name="semvertag",
-    help=("Auto-tag GitLab repos with semantic version tags — one tool, two strategies."),
+    help=("Auto-tag GitLab and GitHub repos with semantic version tags — one tool, two strategies, two providers."),
     no_args_is_help=True,
     add_completion=True,
 )
@@ -40,22 +40,28 @@ def _collect_overrides(  # noqa: PLR0913
     *,
     project_id: int | None,
     strategy: str | None,
-    token: str | None,
     default_branch: str | None,
     gitlab_endpoint: str | None,
+    github_endpoint: str | None,
+    provider: str | None,
+    repo: str | None,
     request_timeout: float | None,
 ) -> dict[str, typing.Any]:
     overrides: dict[str, typing.Any] = {}
+    if provider is not None:
+        overrides["provider"] = provider
     if project_id is not None:
         overrides["project_id"] = project_id
+    if repo is not None:
+        overrides["repo"] = repo
     if strategy is not None:
         overrides["strategy"] = strategy
-    if token is not None:
-        overrides["gitlab.token"] = pydantic.SecretStr(token)
     if default_branch is not None:
         overrides["default_branch"] = default_branch
     if gitlab_endpoint is not None:
         overrides["gitlab.endpoint"] = gitlab_endpoint
+    if github_endpoint is not None:
+        overrides["github.endpoint"] = github_endpoint
     if request_timeout is not None:
         overrides["request_timeout"] = request_timeout
     return overrides
@@ -76,13 +82,21 @@ def _main_callback(  # noqa: PLR0913
         int | None,
         typer.Option("--project-id", help="GitLab project id (or set CI_PROJECT_ID)."),
     ] = None,
+    repo: typing.Annotated[
+        str | None,
+        typer.Option("--repo", help="GitHub repo as OWNER/REPO (or set GITHUB_REPOSITORY)."),
+    ] = None,
+    provider: typing.Annotated[
+        str | None,
+        typer.Option("--provider", help="Provider: 'github' or 'gitlab' (default: auto-detect from CI env)."),
+    ] = None,
     strategy: typing.Annotated[
         str | None,
         typer.Option("--strategy", help="Bump strategy: branch-prefix | conventional-commits."),
     ] = None,
     token: typing.Annotated[
         str | None,
-        typer.Option("--token", help="API token (overrides SEMVERTAG_TOKEN)."),
+        typer.Option("--token", help="API token (overrides SEMVERTAG_TOKEN); routed to the active provider."),
     ] = None,
     default_branch: typing.Annotated[
         str | None,
@@ -91,6 +105,10 @@ def _main_callback(  # noqa: PLR0913
     gitlab_endpoint: typing.Annotated[
         str | None,
         typer.Option("--gitlab-endpoint", help="GitLab API endpoint URL."),
+    ] = None,
+    github_endpoint: typing.Annotated[
+        str | None,
+        typer.Option("--github-endpoint", help="GitHub API endpoint URL (for GitHub Enterprise)."),
     ] = None,
     request_timeout: typing.Annotated[
         float | None,
@@ -105,17 +123,27 @@ def _main_callback(  # noqa: PLR0913
         return
 
     try:
-        settings = Settings()
+        overrides = _collect_overrides(
+            project_id=project_id,
+            strategy=strategy,
+            default_branch=default_branch,
+            gitlab_endpoint=gitlab_endpoint,
+            github_endpoint=github_endpoint,
+            provider=provider,
+            repo=repo,
+            request_timeout=request_timeout,
+        )
+        # Build Settings with top-level CLI overrides merged in one validation
+        # pass so that --provider github --repo owner/repo can satisfy the model
+        # validator even when the environment alone would fail (e.g. no
+        # CI_PROJECT_ID in a non-GitLab-CI shell).
+        top_overrides = {k: v for k, v in overrides.items() if "." not in k}
+        settings = Settings(**top_overrides)
         try:
-            overrides = _collect_overrides(
-                project_id=project_id,
-                strategy=strategy,
-                token=token,
-                default_branch=default_branch,
-                gitlab_endpoint=gitlab_endpoint,
-                request_timeout=request_timeout,
-            )
-            settings = apply_cli_overlay(settings, overrides)
+            settings = apply_cli_overlay(settings, {k: v for k, v in overrides.items() if "." in k})
+            # Second pass: route --token to the resolved active provider.
+            if token is not None:
+                settings = apply_cli_overlay(settings, {f"{settings.provider}.token": pydantic.SecretStr(token)})
         except ValueError as exc:
             raise ConfigError(str(exc)) from exc
     except pydantic.ValidationError as exc:
