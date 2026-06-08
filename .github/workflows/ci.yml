@@ -43,3 +43,20 @@ jobs:
       - run: uv python install ${{ matrix.python-version }}
       - run: just install
       - run: just test --cov-report xml
+
+  action-smoke:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: semvertag
+        uses: ./
+        env:
+          SEMVERTAG_BRANCH_PREFIX__MINOR: '["feat/"]'
+      - name: Verify outputs were emitted
+        run: |
+          test -n "${{ steps.semvertag.outputs.status }}"
+          test -n "${{ steps.semvertag.outputs.bump }}"
