@@ -89,7 +89,7 @@ runs:
         SEMVERTAG_STRATEGY: ${{ inputs.strategy }}
       run: |
         set -euo pipefail
-        result=$(uvx 'semvertag>=0.4,<1' tag --json)
+        result=$(uvx 'semvertag>=0.3.1,<1' tag --json)
         printf '%s\n' "$result"
         printf 'tag=%s\n'    "$(jq -r '.tag // ""' <<<"$result")" >> "$GITHUB_OUTPUT"
         printf 'bump=%s\n'   "$(jq -r '.bump'      <<<"$result")" >> "$GITHUB_OUTPUT"
@@ -102,7 +102,7 @@ runs:
 - **`set -euo pipefail`.** If `uvx` fails, the step fails fast and jq never sees empty/garbage stdin. Avoids ambiguous half-states in `$GITHUB_OUTPUT`.
 - **Echo the JSON before parsing.** Humans reading the job log see the full envelope; no second CLI invocation is needed for diagnostics.
 - **`jq -r '.tag // ""'`.** Guards the `no-bump` case (where `tag` is JSON `null`) so the output becomes an empty string — predictable for downstream `if:` gates. `.bump` and `.status` are always present per `RunResult` schema_version 1.0; no fallback.
-- **CLI version floor `>=0.4,<1`.** Pairs the action with the release that ships it. `@v0` follows minor bumps; the floor inside `action.yml` also bumps on each minor. Lower bound is the release minor; upper bound `<1` defers the 1.0 question.
+- **CLI version floor `>=0.3.1,<1`.** Locks to the minimum CLI version that ships every feature the action depends on (`--json` envelope, `GITHUB_ACTIONS=true` auto-detection, branch-prefix GitHub merge subject recognition). The floor only needs to bump when a future release breaks CLI contract — not on every minor. Upper bound `<1` defers the 1.0 question. This also resolves a chicken-and-egg: the floor is satisfiable from PyPI today, so the PR landing this work passes its own `action-smoke` CI on the first run.
 - **`astral-sh/setup-uv@v8`.** The official Astral installer; one step, prebuilt binary, automatic cache. Used by every modern uv-in-CI project. Trade-off accepted: this adds a third-party action dependency we trust via major-version pin (v8.x.y).
 - **`SEMVERTAG_STRATEGY` always exported.** Mirrors the GitLab Catalog template (`templates/semvertag.yml`). Trade-off: a workflow-level `env: SEMVERTAG_STRATEGY: ...` is overridden by the action's step-env. The fix in that rare case is to use the `with: strategy:` input, which is the documented path.
 - **Internal step id `run`.** Lets the top-level `outputs:` mapping reference `steps.run.outputs.*`. Users wire their own `id:` on the calling `uses:` block to read the exposed outputs.
