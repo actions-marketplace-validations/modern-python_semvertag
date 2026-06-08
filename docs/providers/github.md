@@ -1,14 +1,10 @@
 # GitHub Actions
 
-Use semvertag in GitHub Actions via a small workflow that installs
-`uv` and runs `uvx semvertag tag`. No composite action in your repo,
-no maintained workflow YAML beyond the snippet below.
-
-> **GitHub Actions composite wrapper pending.** A one-line
-> `uses: modern-python/semvertag@v…` via a published composite
-> action is the eventual delivery path — but it has not been
-> published. Paste the workflow below into
-> `.github/workflows/semvertag.yml` until then.
+Use semvertag in GitHub Actions via the published composite action
+(`uses: modern-python/semvertag@v0`). The action installs `uv`, runs
+`semvertag tag`, and surfaces the result as step outputs. A pure-CLI
+fallback for environments that can't consume the action lives at the
+bottom of this page.
 
 ## Quick Start
 
@@ -16,13 +12,12 @@ The minimum useful workflow: auto-tag on every push to the default
 branch.
 
 > **Required setup.** Either rely on the workflow-scoped
-> `GITHUB_TOKEN` (which is auto-issued per job and picked up via the
-> alias chain) — in which case the workflow MUST declare
-> `permissions: contents: write` — OR provide a fine-grained PAT with
-> `contents: write` (single repo) or a classic PAT with `repo` /
-> `public_repo` scope. Store the PAT as a repo secret named
-> `SEMVERTAG_TOKEN`; the alias chain picks it up ahead of
-> `GITHUB_TOKEN`.
+> `GITHUB_TOKEN` (which is auto-issued per job) — in which case the
+> workflow MUST declare `permissions: contents: write` — OR provide a
+> fine-grained PAT with `contents: write` (single repo) or a classic
+> PAT with `repo` / `public_repo` scope. Store the PAT as a repo
+> secret named `SEMVERTAG_TOKEN`; the alias chain picks it up ahead
+> of `GITHUB_TOKEN`.
 
 ```yaml
 name: semvertag
@@ -40,13 +35,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - run: pip install --quiet --no-cache-dir 'uv>=0.4,<1'
-      - run: uvx 'semvertag>=0.3,<1' tag
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: modern-python/semvertag@v0
 ```
 
 The job runs against the latest commit on the default branch and, if
@@ -75,8 +64,21 @@ Pass `--strategy` (or set `SEMVERTAG_STRATEGY`) to one of:
 | `conventional-commits` | Bump from Conventional Commits headers since the last tag. |
 
 ```yaml
-      - run: uvx 'semvertag>=0.3,<1' tag --strategy conventional-commits
+      - uses: modern-python/semvertag@v0
+        with:
+          strategy: conventional-commits
 ```
+
+> **Strategy-specific env vars** (e.g. `SEMVERTAG_BRANCH_PREFIX__MINOR`)
+> remain configured on the calling step. The composite action only
+> explicitly sets `GITHUB_TOKEN` and `SEMVERTAG_STRATEGY`; every other
+> env var on the calling step passes through to the action's run step.
+>
+> ```yaml
+>       - uses: modern-python/semvertag@v0
+>         env:
+>           SEMVERTAG_BRANCH_PREFIX__MINOR: '["feat/"]'
+> ```
 
 ## Required permissions
 
@@ -85,6 +87,42 @@ access to the repository's contents. semvertag reads the token from
 these env vars in order:
 `SEMVERTAG_GITHUB__TOKEN`, `SEMVERTAG_TOKEN`, `GITHUB_TOKEN`. The
 first set value wins.
+
+## Outputs
+
+When you give the step an `id:`, downstream steps can read three outputs:
+
+| Output | Value |
+|---|---|
+| `tag` | The created tag (e.g. `v1.2.3`), or empty string when `status` is `no-bump`. |
+| `bump` | `none` \| `patch` \| `minor` \| `major`. |
+| `status` | `created` (tag pushed) \| `no-bump` (nothing to tag — no prior tag, already tagged, no merge commit, or non-conforming commit). On CLI error the action itself exits non-zero and this output is not written. |
+
+Example: trigger a downstream release-notes job only when a tag was
+created.
+
+```yaml
+name: semvertag-and-release
+on:
+  push:
+    branches: [main]
+
+jobs:
+  tag-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: semvertag
+        uses: modern-python/semvertag@v0
+      - if: steps.semvertag.outputs.status == 'created'
+        run: |
+          echo "tagged ${{ steps.semvertag.outputs.tag }}"
+          echo "bump=${{ steps.semvertag.outputs.bump }}"
+```
 
 ## Token scope: `GITHUB_TOKEN` vs Personal Access Tokens
 
@@ -144,15 +182,46 @@ everything else → none). See
 [Conventional Commits strategy](../strategies/conventional-commits.md)
 for the full type-to-bump mapping.
 
+## Without the composite action
+
+If your environment can't consume the action — GitHub Enterprise
+instances without Marketplace access, security-constrained orgs that
+forbid third-party actions, or anyone who wants explicit control over
+the uv install step — paste the pure-CLI recipe instead:
+
+```yaml
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install --quiet --no-cache-dir 'uv>=0.4,<1'
+      - run: uvx 'semvertag>=0.3.1,<1' tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+```
+
+The behavior matches the composite action exactly; only the install
+shape differs. Strategy is set via env (`SEMVERTAG_STRATEGY`) or CLI
+flag (`--strategy …`). No outputs are produced in this shape — read
+the CLI stdout, or invoke `semvertag tag --json` and parse the
+envelope yourself.
+
 ## Troubleshooting
 
 - **`Token rejected: 401. Verify SEMVERTAG_TOKEN is valid.`** — the
   token is malformed, expired, or revoked. Verify in GitHub UI
   (Settings → Developer settings → Personal access tokens) or
-  rotate the workflow secret. For workflow-scoped tokens, this
-  usually means `GITHUB_TOKEN` was not exported into the step's
-  `env:` — add the `env: GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}`
-  line shown in the Quick Start.
+  rotate the workflow secret. When using the composite action,
+  `GITHUB_TOKEN` is set automatically from the `token` input (which
+  defaults to `${{ github.token }}`). When using the pure-CLI recipe
+  in "Without the composite action", add
+  `env: GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}` to the run step.
 
 - **`Token missing scope or insufficient permission: 403`** — the
   token lacks `contents: write` (fine-grained / workflow-scoped) or

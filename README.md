@@ -59,20 +59,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - run: pip install --quiet 'uv>=0.4,<1'
-      - run: uvx 'semvertag>=0.3,<1' tag
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: modern-python/semvertag@v0
 ```
 
-semvertag auto-detects GitHub Actions from `GITHUB_ACTIONS=true` and
-creates the tag ref via the GitHub API. `fetch-depth: 0` matters —
-the default `1` misses tag-relative history. See
+semvertag auto-detects GitHub Actions, picks the bump from the latest
+commit, and creates the tag ref via the GitHub API. `fetch-depth: 0`
+matters — the default `1` misses tag-relative history. See
 [GitHub Actions docs](docs/providers/github.md) for token scopes,
-GitHub Enterprise setup, and troubleshooting.
+GitHub Enterprise setup, outputs, and troubleshooting.
 
 ## Strategies
 
