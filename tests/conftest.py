@@ -24,6 +24,23 @@ _TOKEN_HEADER: typing.Final = "PRIVATE-TOKEN"
 HandlerCallable: typing.TypeAlias = collections.abc.Callable[[httpx2.Request], httpx2.Response]
 
 
+@pytest.fixture(autouse=True)
+def _isolate_ci_provider_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Strip the host runner's CI env vars so tests aren't auto-routed by where they run.
+
+    Without this, `GITHUB_ACTIONS=true` (set on GitHub Actions runners) or
+    `GITLAB_CI=true` (set on GitLab CI runners) leaks into the test process and
+    causes `Settings._resolve_provider` to pick a provider the test didn't ask for.
+    Tests that exercise auto-detection set these explicitly via their own
+    monkeypatch.setenv calls — this fixture only clears the default state.
+    """
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    monkeypatch.delenv("GITLAB_CI", raising=False)
+    monkeypatch.delenv("SEMVERTAG_PROVIDER", raising=False)
+    monkeypatch.delenv("PROVIDER", raising=False)
+
+
 def default_handler(request: httpx2.Request) -> httpx2.Response:
     method: typing.Final = request.method
     path: typing.Final = request.url.path
