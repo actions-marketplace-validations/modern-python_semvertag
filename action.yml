@@ -15,6 +15,10 @@ inputs:
     description: 'GitHub token with contents: write. Defaults to the workflow-issued github.token.'
     required: false
     default: ${{ github.token }}
+  dry-run:
+    description: 'If true, compute the bump and emit the planned tag/bump but do not push a tag.'
+    required: false
+    default: 'false'
 
 outputs:
   tag:
@@ -40,10 +44,12 @@ runs:
         SEMVERTAG_STRATEGY: ${{ inputs.strategy }}
       run: |
         set -euo pipefail
-        result=$(uvx 'semvertag>=0.3.1,<1' tag --json)
+        dry_run_flag=''
+        if [ "${{ inputs.dry-run }}" = "true" ]; then dry_run_flag='--dry-run'; fi
+        result=$(uvx 'semvertag>=0.5.0,<1' tag --json $dry_run_flag)
         printf '%s\n' "$result"
         # Normalize the CLI's internal status (`no_tags`, `already_tagged`,
-        # `no_merge_commit`, `no_conforming_commit`, ...) to a stable
+        # `no_merge_commit`, `no_conforming_commit`, `dry_run`, ...) to a stable
         # consumer-facing enum. `set -euo pipefail` ensures we never reach
         # here on CLI errors, so there is no `error` value to surface.
         case "$(jq -r '.status' <<<"$result")" in
