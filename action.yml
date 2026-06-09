@@ -46,6 +46,8 @@ runs:
         set -euo pipefail
         dry_run_flag=''
         if [ "${{ inputs.dry-run }}" = "true" ]; then dry_run_flag='--dry-run'; fi
+        # `$dry_run_flag` is intentionally unquoted: empty value collapses
+        # to no argument; non-empty expands to the literal `--dry-run`.
         result=$(uvx 'semvertag>=0.5.0,<1' tag --json $dry_run_flag)
         printf '%s\n' "$result"
         # Normalize the CLI's internal status (`no_tags`, `already_tagged`,
