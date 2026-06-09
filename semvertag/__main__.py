@@ -176,11 +176,15 @@ def _tag_command(
         bool,
         typer.Option("--json", help="Emit a JSON envelope on stdout instead of human-readable output."),
     ] = False,
+    dry_run: typing.Annotated[
+        bool,
+        typer.Option("--dry-run", help="Compute the bump and print the result, but do not push a tag."),
+    ] = False,
 ) -> None:
     output: Output = build_json_output(quiet=quiet) if json_flag else build_rich_output(quiet=quiet)
     try:
         use_case = _resolve_use_case(ctx=ctx)
-        use_case(output=output)
+        use_case(output=output, dry_run=dry_run)
     except ImportError as exc:
         err = ConfigError(f"Required module unavailable: {exc}.")
         output.error(str(err))

@@ -18,7 +18,7 @@ class SemvertagUseCase:
     provider: Provider
     strategy: BumpStrategy
 
-    def __call__(self, *, output: Output) -> RunResult:
+    def __call__(self, *, output: Output, dry_run: bool = False) -> RunResult:
         output.progress(f"Detected strategy: {self.strategy.name}")
         output.progress("Fetching latest commit on default branch...")
         commit: typing.Final = self.provider.get_latest_commit_on_default_branch()
@@ -60,6 +60,16 @@ class SemvertagUseCase:
             )
 
         new_version: typing.Final = _compute_new_version(latest_semver_tag, bump)
+        if dry_run:
+            return self._emit(
+                output=output,
+                bump=bump,
+                status="dry_run",
+                tag=new_version,
+                commit=commit.sha,
+                reason=None,
+            )
+
         output.progress(f"Creating tag {new_version}...")
         self.provider.create_tag(name=new_version, commit_sha=commit.sha)
         return self._emit(

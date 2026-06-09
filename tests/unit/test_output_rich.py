@@ -143,3 +143,22 @@ def test_build_json_output_returns_json_output_with_quiet_passthrough() -> None:
     assert isinstance(built, JsonOutput)
     assert built.quiet is True
     assert built.error_console.stderr is True
+
+
+def test_emit_renders_dry_run_with_would_create_phrasing() -> None:
+    output, stdout_buf, _stderr = _make_pair()
+    dry_run_result: typing.Final = RunResult(
+        strategy="branch-prefix",
+        bump="minor",
+        status="dry_run",
+        tag="1.2.0",
+        commit="a2b4d12abc1234567890",
+        reason=None,
+    )
+    output.emit(dry_run_result)
+    stdout_text: typing.Final = stdout_buf.getvalue()
+    assert "Dry run" in stdout_text
+    assert "would create tag 1.2.0" in stdout_text
+    assert "a2b4d12" in stdout_text
+    assert "branch-prefix" in stdout_text
+    assert "minor" in stdout_text

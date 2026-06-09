@@ -140,3 +140,24 @@ def test_main_callback_auto_detects_github_from_env(monkeypatch: pytest.MonkeyPa
     with ioc.container:
         result = runner.invoke(MAIN_APP, ["tag", "--quiet"])
     assert result.exit_code in (0, 3, 4)
+
+
+def test_dry_run_skips_post_to_tags_endpoint_and_emits_dry_run_status(
+    cli_env: None,  # noqa: ARG001
+    install_mock_transport: collections.abc.Callable[[HandlerCallable], None],
+    cli_runner: CliRunner,
+) -> None:
+    recorded: list[httpx2.Request] = []
+    install_mock_transport(_make_recording_handler(merge_commit_handler(), recorded))
+
+    result: typing.Final = cli_runner.invoke(MAIN_APP, ["tag", "--dry-run", "--json"])
+
+    assert result.exit_code == 0, result.output + result.stderr
+    lines: typing.Final = [line for line in result.stdout.splitlines() if line.strip()]
+    assert len(lines) == 1, f"expected one JSON line, got: {lines!r}"
+    payload: typing.Final = json_module.loads(lines[0])
+    assert payload["status"] == "dry_run"
+    assert payload["tag"] == _EXPECTED_NEW_TAG
+    assert payload["bump"] == "minor"
+    posted: typing.Final = [r for r in recorded if r.method == "POST" and r.url.path == _TAGS_POST_PATH]
+    assert posted == [], f"dry-run must not POST to tags endpoint; got: {posted}"
