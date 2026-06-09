@@ -56,7 +56,13 @@ jobs:
         uses: ./
         env:
           SEMVERTAG_BRANCH_PREFIX__MINOR: '["feat/"]'
-      - name: Verify outputs were emitted
+      - name: Verify outputs match the no-bump contract
+        # The CLI queries the GitHub API for the latest commit on the default
+        # branch (not the local PR checkout), so on every PR it lands in one
+        # of branch-prefix's no-bump statuses (`already_tagged`,
+        # `no_merge_commit`, `no_conforming_commit`) — all normalized to
+        # `no-bump` by action.yml. `tag` is intentionally NOT asserted:
+        # `already_tagged` populates it with the existing tag.
         run: |
-          test -n "${{ steps.semvertag.outputs.status }}"
-          test -n "${{ steps.semvertag.outputs.bump }}"
+          test "${{ steps.semvertag.outputs.status }}" = "no-bump"
+          test "${{ steps.semvertag.outputs.bump }}"   = "none"
