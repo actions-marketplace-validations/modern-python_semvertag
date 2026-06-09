@@ -78,7 +78,7 @@ GitHub Enterprise setup, outputs, and troubleshooting.
   header (`feat:` minor, `fix:`/`perf:` patch, `!` or `BREAKING
   CHANGE:` major).
 
-Both are configurable via env vars. See [docs](https://semvertag.readthedocs.io)
+Both are configurable via env vars. See [docs](https://semvertag.modern-python.org)
 for the full configuration surface.
 
 ## License
