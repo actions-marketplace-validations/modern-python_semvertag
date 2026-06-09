@@ -130,13 +130,16 @@ Pass `dry-run: true` to compute the bump without pushing a tag — useful in
 CI smoke tests, in PR previews, or to see what the next release would be:
 
 ```yaml
-- uses: modern-python/semvertag@v0
+- id: semvertag
+  uses: modern-python/semvertag@v0
   with:
     dry-run: true
 ```
 
 When `dry-run: true`, the action's `status` output is `no-bump` (no real tag
-was pushed) and `bump` / `tag` reflect what *would* have happened.
+was pushed) and `bump` / `tag` reflect what *would* have happened. The raw
+CLI's `status` field is `dry_run`; the action surface normalizes it to
+`no-bump` so callers see a stable two-value enum.
 
 You can also run this locally without the action:
 
