@@ -45,6 +45,12 @@ jobs:
       - run: just test --cov-report xml
 
   action-smoke:
+    # PR-only: on push-to-main the latest commit IS a `feat/`/`bugfix/` merge,
+    # so branch-prefix returns `created`/`patch`/`minor` — the no-bump
+    # assertions would fail. End-to-end coverage on main is provided by the
+    # dogfood workflow (`.github/workflows/semvertag.yml`), which runs the
+    # same `uses: ./` and pushes a real tag.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: write
