@@ -175,15 +175,14 @@ No new fields. `schema_version` stays at `1.0` because `status` was already a st
 
 `_output.py:_format_result` currently has two branches: `created` (line 57-59, "Created tag X on commit Y...") and the catch-all (line 60-63, "No tag created (status: X, ...)"). Without a dedicated `dry_run` branch, dry-run output would fall through to "No tag created (status: dry_run, ...)" — technically true, but misleading: a dry-run produced an informative result, not a no-op.
 
-Add one branch in `_format_result`, placed before the catch-all:
+Add one branch in `_format_result`, placed before the catch-all. Hoist `short` above the if-chain so `typing.Final` is declared once (avoids a duplicate-Final flag from `ty` and de-duplicates the slice):
 
 ```python
 def _format_result(result: RunResult) -> str:
+    short: typing.Final = (result.commit or "")[:_COMMIT_SHORT_LEN]
     if result.status == "created":
-        short: typing.Final = (result.commit or "")[:_COMMIT_SHORT_LEN]
         return f"Created tag {result.tag} on commit {short} (strategy: {result.strategy}, bump: {result.bump})"
     if result.status == "dry_run":
-        short = (result.commit or "")[:_COMMIT_SHORT_LEN]
         return f"Dry run: would create tag {result.tag} on commit {short} (strategy: {result.strategy}, bump: {result.bump})"
     return (
         f"No tag created (status: {result.status}, strategy: {result.strategy}, "
@@ -191,7 +190,7 @@ def _format_result(result: RunResult) -> str:
     )
 ```
 
-Mirrors the `created` branch exactly, swapping "Created tag" → "Dry run: would create tag". Same structure, same fields, same shortened commit.
+Mirrors the `created` branch's format, swapping "Created tag" → "Dry run: would create tag". The no-tag fallback doesn't use `short` — the wasted 2-byte slice is fine.
 
 ### 7. Release
 
