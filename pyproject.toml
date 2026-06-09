@@ -30,7 +30,7 @@ semvertag = "semvertag.__main__:main"
 
 [project.urls]
 repository = "https://github.com/modern-python/semvertag"
-docs = "https://semvertag.readthedocs.io"
+docs = "https://semvertag.modern-python.org"
 
 [build-system]
 requires = ["uv_build>=0.11,<1"]

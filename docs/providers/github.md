@@ -124,6 +124,35 @@ jobs:
           echo "bump=${{ steps.semvertag.outputs.bump }}"
 ```
 
+## Preview the next bump
+
+Pass `dry-run: true` to compute the bump without pushing a tag — useful in
+CI smoke tests, in PR previews, or to see what the next release would be:
+
+```yaml
+- id: semvertag
+  uses: modern-python/semvertag@v0
+  with:
+    dry-run: true
+```
+
+When `dry-run: true`, the action's `status` output is `no-bump` (no real tag
+was pushed) and `bump` / `tag` reflect what *would* have happened. The raw
+CLI's `status` field is `dry_run`; the action surface normalizes it to
+`no-bump` so callers see a stable two-value enum.
+
+You can also run this locally without the action:
+
+```bash
+uvx 'semvertag>=0.5.0' tag --dry-run --json
+```
+
+Output (example):
+
+```json
+{"schema_version":"1.0","strategy":"branch-prefix","bump":"minor","status":"dry_run","tag":"0.6.0","commit":"abc1234..."}
+```
+
 ## Token scope: `GITHUB_TOKEN` vs Personal Access Tokens
 
 Three cases govern which token the job should use:
