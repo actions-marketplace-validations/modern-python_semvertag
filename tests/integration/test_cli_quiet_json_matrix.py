@@ -113,7 +113,7 @@ def test_exits_with_one_on_generic_semvertag_error(
 ) -> None:
     install_mock_transport(merge_commit_handler())
 
-    def raising_call(self: SemvertagUseCase, *, output: Output) -> typing.Any:  # noqa: ANN401, ARG001
+    def raising_call(self: SemvertagUseCase, *, output: Output, dry_run: bool = False) -> typing.Any:  # noqa: ANN401, ARG001
         msg = "synthetic generic failure for AC9."
         raise SemvertagError(msg)
 

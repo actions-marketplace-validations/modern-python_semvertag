@@ -24,7 +24,7 @@ class _RaisingUseCase:
     def __init__(self, exc: BaseException) -> None:
         self._exc = exc
 
-    def __call__(self, *, output: Output) -> typing.NoReturn:  # noqa: ARG002
+    def __call__(self, *, output: Output, dry_run: bool = False) -> typing.NoReturn:  # noqa: ARG002
         raise self._exc
 
 
