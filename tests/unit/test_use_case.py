@@ -228,3 +228,67 @@ def test_progress_messages_fire_before_each_phase() -> None:
     assert any("Fetching" in msg for msg in output.progress_messages)
     assert any("Computing bump" in msg for msg in output.progress_messages)
     assert any("Creating tag" in msg for msg in output.progress_messages)
+
+
+def test_dry_run_skips_create_tag_and_emits_dry_run_status() -> None:
+    use_case, provider, output = _make_use_case()
+
+    result: typing.Final = use_case(output=output, dry_run=True)
+
+    assert result.status == "dry_run"
+    assert result.tag == _EXPECTED_NEW_TAG
+    assert result.bump == "minor"
+    assert result.strategy == _BRANCH_PREFIX_STRATEGY
+    assert result.commit == _LATEST_SHA
+    assert result.reason is None
+    assert provider.create_tag_calls == []
+    assert output.emitted_results == [result]
+
+
+def test_dry_run_does_not_emit_creating_tag_progress() -> None:
+    use_case, _provider, output = _make_use_case()
+
+    use_case(output=output, dry_run=True)
+
+    assert not any("Creating tag" in msg for msg in output.progress_messages)
+
+
+def test_dry_run_does_not_affect_already_tagged_path() -> None:
+    use_case, provider, output = _make_use_case(
+        tags=[Tag(name=_LATEST_TAG_NAME, commit_sha=_LATEST_SHA)],
+    )
+
+    result: typing.Final = use_case(output=output, dry_run=True)
+
+    assert result.status == "already_tagged"
+    assert provider.create_tag_calls == []
+
+
+def test_dry_run_does_not_affect_no_tags_path() -> None:
+    use_case, provider, output = _make_use_case(tags=[])
+
+    result: typing.Final = use_case(output=output, dry_run=True)
+
+    assert result.status == "no_tags"
+    assert provider.create_tag_calls == []
+
+
+def test_dry_run_does_not_affect_strategy_no_bump_path() -> None:
+    use_case, provider, output = _make_use_case(
+        commit_message=_NON_MERGE_MESSAGE,
+        bump=Bump.NONE,
+    )
+
+    result: typing.Final = use_case(output=output, dry_run=True)
+
+    assert result.status == "no_merge_commit"
+    assert provider.create_tag_calls == []
+
+
+def test_dry_run_false_default_creates_tag() -> None:
+    use_case, provider, output = _make_use_case()
+
+    result: typing.Final = use_case(output=output)
+
+    assert result.status == "created"
+    assert provider.create_tag_calls == [(_EXPECTED_NEW_TAG, _LATEST_SHA)]
