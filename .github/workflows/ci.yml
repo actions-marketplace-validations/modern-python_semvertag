@@ -45,30 +45,33 @@ jobs:
       - run: just test --cov-report xml
 
   action-smoke:
-    # PR-only: on push-to-main the latest commit IS a `feat/`/`bugfix/` merge,
-    # so branch-prefix returns `created`/`patch`/`minor` — the no-bump
-    # assertions would fail. End-to-end coverage on main is provided by the
-    # dogfood workflow (`.github/workflows/semvertag.yml`), which runs the
-    # same `uses: ./` and pushes a real tag.
+    # PR-only: action-smoke has no value on push-to-main, where the dogfood
+    # workflow (`.github/workflows/semvertag.yml`) exercises the real
+    # composite action against the merge commit. Under `dry-run: true`,
+    # this job is side-effect-free regardless of main's tag state.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    # No `permissions:` block: `contents: read` is sufficient because
+    # dry-run guarantees no tag-push attempt. Even a future regression
+    # that bypassed dry-run would be denied by the API.
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - id: semvertag
         uses: ./
+        with:
+          dry-run: 'true'
         env:
           SEMVERTAG_BRANCH_PREFIX__MINOR: '["feat/"]'
-      - name: Verify outputs match the no-bump contract
-        # The CLI queries the GitHub API for the latest commit on the default
-        # branch (not the local PR checkout), so on every PR it lands in one
-        # of branch-prefix's no-bump statuses (`already_tagged`,
-        # `no_merge_commit`, `no_conforming_commit`) — all normalized to
-        # `no-bump` by action.yml. `tag` is intentionally NOT asserted:
-        # `already_tagged` populates it with the existing tag.
+      - name: Verify the composite normalized dry-run to no-bump
+        # Under `dry-run: true`, the CLI's status is one of `dry_run`,
+        # `no_tags`, `already_tagged`, `no_merge_commit`, `no_conforming_commit` —
+        # all normalized to `no-bump` by action.yml. If action.yml's
+        # dry-run wiring regresses, the CLI would push a tag, status would
+        # be `created`, and this assertion would fail loudly. `bump` is
+        # intentionally NOT asserted: under dry-run it reflects the would-be
+        # value (`patch`/`minor`/`major` for an untagged merge, `none`
+        # otherwise) — not a stable smoke value.
         run: |
           test "${{ steps.semvertag.outputs.status }}" = "no-bump"
-          test "${{ steps.semvertag.outputs.bump }}"   = "none"
