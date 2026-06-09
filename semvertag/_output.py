@@ -58,7 +58,10 @@ def _format_result(result: RunResult) -> str:
     if result.status == "created":
         return f"Created tag {result.tag} on commit {short} (strategy: {result.strategy}, bump: {result.bump})"
     if result.status == "dry_run":
-        return f"Dry run: would create tag {result.tag} on commit {short} (strategy: {result.strategy}, bump: {result.bump})"
+        return (
+            f"Dry run: would create tag {result.tag} on commit {short}"
+            f" (strategy: {result.strategy}, bump: {result.bump})"
+        )
     return (
         f"No tag created (status: {result.status}, strategy: {result.strategy}, "
         f"bump: {result.bump}, reason: {result.reason})"
