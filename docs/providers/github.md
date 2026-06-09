@@ -230,7 +230,7 @@ jobs:
         with:
           python-version: "3.13"
       - run: pip install --quiet --no-cache-dir 'uv>=0.4,<1'
-      - run: uvx 'semvertag>=0.3.1,<1' tag
+      - run: uvx 'semvertag>=0.5.0,<1' tag
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 ```
