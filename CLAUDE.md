@@ -79,3 +79,18 @@ repositories. Two strategies (`branch-prefix`, `conventional-commits`), two
 providers implemented today (GitLab, GitHub), distributed as a Python CLI plus
 a GitHub Actions wrapper (`action.yml`) and a GitLab CI Catalog component
 (`templates/semvertag.yml`).
+
+## Tag and release naming
+
+Two distinct tag conventions coexist — confusing them is easy:
+
+- **Release tags: bare semver, no `v` prefix** (`0.3.1`, `0.4.0`). `just publish`
+  runs `uv version $GITHUB_REF_NAME` expecting bare semver; the branch-prefix
+  strategy emits bare-semver tags by default; release URLs are
+  `releases/tag/0.4.0`. When touching the CLI / `Justfile` / publish flow, think
+  bare semver — `$GITHUB_REF_NAME` is `0.4.0`, not `v0.4.0`.
+- **Action floating tag: `v`-prefixed** (`v0`). `.github/workflows/tag-major.yml`
+  strips any leading `v` from the release tag then prepends `v` to the major
+  segment (`0.4.0` → `v0`), so consumers can pin `uses: modern-python/semvertag@v0`
+  per the GHA ecosystem convention. When touching `tag-major.yml` or
+  action-consumer docs, think `v`-prefix.
