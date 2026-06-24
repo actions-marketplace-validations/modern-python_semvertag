@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 date: 2026-06-24
 slug: closed-outcome-type
 spec: closed-outcome-type
