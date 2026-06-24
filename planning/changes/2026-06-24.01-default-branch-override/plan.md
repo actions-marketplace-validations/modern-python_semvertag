@@ -1,5 +1,5 @@
 ---
-status: draft
+status: shipped
 date: 2026-06-24
 slug: default-branch-override
 spec: default-branch-override
@@ -29,12 +29,12 @@ TDD throughout: red (failing tests) → green (implement) → refactor.
 - Modify: `tests/unit/test_ioc.py`
 - Modify: `tests/unit/test_settings.py`
 
-- [ ] Provider tests (both forges): override returns without hitting the
+- [x] Provider tests (both forges): override returns without hitting the
   repo/project endpoint; commit lookup uses the override and skips the
   default-branch GET.
-- [ ] IoC test: `_build_current_provider` propagates `settings.default_branch`.
-- [ ] Settings test: blank `default_branch` (empty/whitespace) → `None`; padded name stripped.
-- [ ] Confirm the new provider tests fail (field/short-circuit absent).
+- [x] IoC test: `_build_current_provider` propagates `settings.default_branch`.
+- [x] Settings test: blank `default_branch` (empty/whitespace) → `None`; padded name stripped.
+- [x] Confirm the new provider tests fail (field/short-circuit absent).
 
 ### Task 2: Implement (green)
 
@@ -44,9 +44,9 @@ TDD throughout: red (failing tests) → green (implement) → refactor.
 - Modify: `semvertag/providers/gitlab.py` — add field + short-circuit
 - Modify: `semvertag/ioc.py` — wire `default_branch=settings.default_branch`
 
-- [ ] Implement; run `just test` to green, `just lint-ci` clean.
+- [x] Implement; run `just test` to green, `just lint-ci` clean.
 
 ### Task 3: Promote + ship
 
-- [ ] Update `architecture/providers.md` to document the override seam.
-- [ ] `just index`; set `status: shipped`, fill `pr`/`outcome` at merge.
+- [x] Update `architecture/providers.md` to document the override seam.
+- [x] `just index`; set `status: shipped`, fill `pr`/`outcome` at merge.
