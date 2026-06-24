@@ -12,7 +12,14 @@ Two providers ship today.
 not by subclassing). The abstract operations:
 
 - `name: str` — the provider id.
-- `get_default_branch(self) -> str` — the repo's default branch name.
+- `get_default_branch(self) -> str` — the repo's default branch name. Both
+  concrete providers carry an optional `default_branch: str | None = None`
+  (wired from `settings.default_branch` in `semvertag/ioc.py`): when set, this
+  short-circuits to the override and the default-branch API call is skipped
+  entirely; when `None`, the forge API is queried as before. The override is
+  the seam where `--default-branch` / `SEMVERTAG_DEFAULT_BRANCH` lands — a
+  blank value (empty or whitespace, e.g. a declared-but-empty env var in CI) is
+  normalized to "unset" at the settings edge, falling back to the API.
 - `get_latest_commit_on_default_branch(self) -> Commit` — head commit of that
   branch as a frozen `Commit` (`sha`, `message`).
 - `list_tags(self) -> list[Tag]` — every tag as `Tag` (`name`, `commit_sha`).

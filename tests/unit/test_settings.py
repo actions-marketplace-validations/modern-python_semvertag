@@ -36,6 +36,19 @@ def test_uses_defaults_when_no_env_set() -> None:
 
 
 @pytest.mark.usefixtures("clean_settings_env")
+@pytest.mark.parametrize("blank", ["", "   "])
+def test_blank_default_branch_is_treated_as_unset(blank: str) -> None:
+    settings: typing.Final = Settings(project_id=_PROJECT_ID_INT_SEMVERTAG, default_branch=blank)
+    assert settings.default_branch is None
+
+
+@pytest.mark.usefixtures("clean_settings_env")
+def test_default_branch_is_stripped() -> None:
+    settings: typing.Final = Settings(project_id=_PROJECT_ID_INT_SEMVERTAG, default_branch="  develop  ")
+    assert settings.default_branch == "develop"
+
+
+@pytest.mark.usefixtures("clean_settings_env")
 def test_resolves_token_from_ci_job_token_when_only_native_var_set(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
